@@ -22,7 +22,7 @@ set_property "target_language" "VHDL" $obj
 ########################################################################
 # Sources
 add_files -norecurse ../src/ADC1511_Dual_1GHzX2_Top.vhd
-add_files -norecurse ../src/data_capture_module.vhd
+add_files -norecurse ../src/data_capture.vhd
 add_files -norecurse ../src/clock_generator.vhd
 add_files -norecurse ../src/QuadSPI_adc_250x4_module.vhd
 add_files -norecurse ../src/trigger_capture.vhd

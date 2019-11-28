@@ -30,7 +30,8 @@ use work.spi_adc_250x4_master;
 use work.fifo_sream;
 --use work.async_fifo_64;
 use work.trigger_capture;
-use work.data_capture_module;
+--use work.data_capture_module;
+use work.data_capture;
 use work.QuadSPI_adc_250x4_module;
 --use work.ila;
 --use work.ila_data_in;
@@ -210,7 +211,7 @@ adc1_data_receiver : entity HMCAD1511_v3_00
       DxXBp                 => adc1_dx_b_p,
       DxXBn                 => adc1_dx_b_n,
       
-      reset                 => sys_rst,
+      reset                 => rst,
       m_strm_valid          => adc1_receiver_valid,
       m_strm_data           => adc1_data_out,
       divclk_out            => adc1_clk_div8
@@ -229,7 +230,7 @@ adc2_data_receiver : entity HMCAD1511_v3_00
       DxXBp                 => adc2_dx_b_p,
       DxXBn                 => adc2_dx_b_n,
       
-      reset                 => sys_rst,
+      reset                 => rst,
       m_strm_valid          => adc2_receiver_valid,
       m_strm_data           => adc2_data_out,
       divclk_out            => adc2_clk_div8
@@ -252,36 +253,59 @@ adc1_trigger_capture_inst : entity trigger_capture
       trigger_start     => adc1_trigger_start           -- выходной сигнал управляет модулем захвата данных
     );
 
-adc_stream_data_capture_inst    : entity data_capture_module
-    generic map (
-      c_max_window_size_width   => 16,
-      c_strm_data_width         => 64,
-      c_trig_delay              => 2
+--adc_stream_data_capture_inst    : entity data_capture_module
+--    generic map (
+--      c_max_window_size_width   => 16,
+--      c_strm_data_width         => 64,
+--      c_trig_delay              => 2
+--    )
+--    Port map(
+--      clk                   => adc1_clk_div8,
+--      rst                   => rst,
+--      trigger_start         => trigger_start,
+--      window_size           => trig_window_width_reg,
+--      trig_position         => trig_position_reg,
+--
+--      s0_strm_data          => adc1_data_out,
+--      s0_strm_valid         => adc1_receiver_valid,
+--      s0_strm_ready         => open,
+--      
+--      s1_strm_data          => adc2_data_out,
+--      s1_strm_valid         => adc2_receiver_valid,
+--      s1_strm_ready         => open,
+--
+--      m0_strm_data          => adc1_m_strm_data,
+--      m0_strm_valid         => adc1_m_strm_valid,
+--      m0_strm_ready         => adc1_m_strm_ready,
+--      m0_strm_rst           => adc1_capture_module_rst,
+--
+--      m1_strm_data          => adc2_m_strm_data,
+--      m1_strm_valid         => adc2_m_strm_valid,
+--      m1_strm_ready         => adc2_m_strm_ready,
+--      m1_strm_rst           => adc2_capture_module_rst
+--    );
+--    
+
+adc1_data_capture_inst : entity data_capture
+    generic map(
+      c_max_window_size_width   =>  16,
+      c_strm_data_width         =>  64,
+      c_trig_delay              =>  2
     )
-    Port map(
-      clk                   => adc1_clk_div8,
-      rst                   => rst,
-      trigger_start         => trigger_start,
-      window_size           => trig_window_width_reg,
-      trig_position         => trig_position_reg,
+    Port map( 
+      areset                    => rst,
+      trigger_start             => trigger_start,
+      window_size               => trig_window_width_reg,
+      trig_position             => trig_position_reg,
 
-      s0_strm_data          => adc1_data_out,
-      s0_strm_valid         => adc1_receiver_valid,
-      s0_strm_ready         => open,
-      
-      s1_strm_data          => adc2_data_out,
-      s1_strm_valid         => adc2_receiver_valid,
-      s1_strm_ready         => open,
+      aclk                      => adc1_clk_div8, 
+      s_strm_data               => adc1_data_out,
+      s_strm_valid              => adc1_receiver_valid,
 
-      m0_strm_data          => adc1_m_strm_data,
-      m0_strm_valid         => adc1_m_strm_valid,
-      m0_strm_ready         => adc1_m_strm_ready,
-      m0_strm_rst           => adc1_capture_module_rst,
-
-      m1_strm_data          => adc2_m_strm_data,
-      m1_strm_valid         => adc2_m_strm_valid,
-      m1_strm_ready         => adc2_m_strm_ready,
-      m1_strm_rst           => adc2_capture_module_rst
+      m_strm_data               => adc1_m_strm_data,
+      m_strm_valid              => adc1_m_strm_valid,
+      m_strm_ready              => adc1_m_strm_ready,
+      m_strm_rst                => adc1_capture_module_rst
     );
 
 adc1_stream_fifo_inst : ENTITY fifo_sream 
@@ -316,10 +340,32 @@ adc2_trigger_capture_inst : entity trigger_capture
       trigger_start     => adc2_trigger_start           -- выходной сигнал управляет модулем захвата данных
     );
 
+adc2_data_capture_inst : entity data_capture
+    generic map(
+      c_max_window_size_width   =>  16,
+      c_strm_data_width         =>  64,
+      c_trig_delay              =>  2
+    )
+    Port map( 
+      areset                    => rst,
+      trigger_start             => trigger_start,
+      window_size               => trig_window_width_reg,
+      trig_position             => trig_position_reg,
+
+      aclk                      => adc2_clk_div8, 
+      s_strm_data               => adc2_data_out,
+      s_strm_valid              => adc2_receiver_valid,
+
+      m_strm_data               => adc2_m_strm_data,
+      m_strm_valid              => adc2_m_strm_valid,
+      m_strm_ready              => adc2_m_strm_ready,
+      m_strm_rst                => adc2_capture_module_rst
+    );
+
 adc2_stream_fifo_inst : ENTITY fifo_sream 
   PORT MAP(
     m_aclk          => clk_125MHz,
-    s_aclk          => adc1_clk_div8,
+    s_aclk          => adc2_clk_div8,
     s_aresetn       => strm_fifo2_rstn,
     s_axis_tvalid   => adc2_m_strm_valid,
     s_axis_tready   => adc2_m_strm_ready,

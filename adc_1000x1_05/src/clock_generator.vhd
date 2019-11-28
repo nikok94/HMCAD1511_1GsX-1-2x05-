@@ -54,19 +54,19 @@ architecture Behavioral of clock_generator is
     signal rst_vector       : std_logic_vector(7 downto 0):= (OTHERS => '1');
 begin
 
-process(pll_clkout_0, LOCKED) 
+process(pll_clkout_0, LOCKED, rst_in) 
 begin
-    if (LOCKED = '0') then
-      rst <= '1';
+    if (LOCKED = '0') or (rst_in = '1') then
       rst_vector <= (others => '1');
     else
       if rising_edge(pll_clkout_0) then
         rst_vector(7 downto 1 ) <= rst_vector(6 downto 0);
         rst_vector(0) <= '0';
-        rst <= rst_vector(7);
       end if;
   end if;
 end process;
+
+rst <= rst_vector(7);
 
 PLL_BASE_inst : PLL_BASE
    generic map (
