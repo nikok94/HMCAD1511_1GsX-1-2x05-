@@ -24,7 +24,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_unsigned.ALL;
 
 library work;
---use work.HMCAD1511_v3_00;
+use work.HMCAD1511_v3_00;
 use work.HMCAD1511_x2_v1_00;
 use work.clock_generator;
 use work.spi_adc_250x4_master;
@@ -312,7 +312,7 @@ adc_calib_done <= adc1_valid and adc2_valid;
 --      lclk_obuf             => lclk2,
 --      fclk_obuf             => fclk2
 --    );
---    
+
 adc_data_receiver   :  entity HMCAD1511_x2_v1_00
     Port map(
       LCLKp_1               => adc1_lclk_p,

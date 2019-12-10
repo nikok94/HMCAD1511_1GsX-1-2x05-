@@ -26,7 +26,7 @@ use IEEE.STD_LOGIC_unsigned.ALL;
 library work;
 use work.data_deserializer;
 use work.high_speed_clock_to_serdes;
-use work.deser;
+
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -265,22 +265,6 @@ frame_deser : entity data_deserializer
     );
 
 fclk_obuf <= frame_obuf;
-
-frame_deser_1 : entity deser
-    generic map(
-      DIFF_TERM         => DIFF_TERM
-    )
-    Port map(
-      serdes_clk0       => serdesclk0,
-      serdes_clk1       => serdesclk1,
-      serdes_divclk     => gclk,
-      serdes_strobe     => serdesstrobe,
-      data_in           => frame_obuf,
-      calib_valid       => open,
-      reset             => '0',
-      result            => frame,
-      bitslip           => '0'
-    );
 
 generate_proc : for i in 0 to 3 generate
 da_deser : entity data_deserializer 

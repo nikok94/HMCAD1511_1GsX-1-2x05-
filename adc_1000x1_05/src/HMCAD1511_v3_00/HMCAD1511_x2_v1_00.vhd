@@ -111,7 +111,8 @@ architecture Behavioral of HMCAD1511_x2_v1_00 is
     signal frame1_fall        : std_logic;
     signal frame2_fall        : std_logic;
     signal bitslip            : std_logic;
-    type state_machine        is (idle, frame_st, bitslip_st, counter_st, ready_st, rst_st, rst_cont_st);
+    signal bitslip2           : std_logic;
+    type state_machine        is (idle, frame_st, bitslip_st, counter_st, ready_st, rst_st, rst_cont_st, bs_fr_st, bs_st, bs_counter_st);
     signal state, next_state  : state_machine;
     signal valid              : std_logic;
     signal rst                : std_logic;
@@ -119,6 +120,9 @@ architecture Behavioral of HMCAD1511_x2_v1_00 is
     signal bitsleep_counter   : std_logic_vector(3 downto 0);
     signal lclk_1             : std_logic;
     signal lclk_2             : std_logic;
+    signal c_max_count        : std_logic_vector(2 downto 0);
+    signal bs_counter         : std_logic_vector(2 downto 0);
+    signal bs                 : std_logic;
 
 begin
 
@@ -146,7 +150,7 @@ counter_proc :
 process(gclk_1)
 begin
   if rising_edge(gclk_1) then
-    if (state = counter_st) then
+    if (state = counter_st) or (state = bs_counter_st) then
       counter <= counter + 1;
     else
       counter <= (others => '0');
@@ -177,7 +181,7 @@ begin
 end process;
 
 next_state_proc :
-process(state, valid_fr, counter(counter'length - 1), frame_data_1, validb1, valida1, validb2, valida2, rst_counter(rst_counter'length - 1), frame2_fall)
+process(state, valid_fr, counter(counter'length - 1), frame_data_1, validb1, valida1, validb2, valida2, rst_counter(rst_counter'length - 1), frame2_fall, bs_counter, c_max_count)
 begin
   next_state <= state;
     case state is
@@ -186,7 +190,7 @@ begin
       when frame_st =>
         if (valid_fr = '1') then
           if (frame_data_1 = frame_pattern) then
-            next_state <= ready_st;
+            next_state <= bs_fr_st;
           else
             next_state <= bitslip_st;
           end if;
@@ -196,6 +200,18 @@ begin
       when counter_st => 
         if (counter(counter'length - 1) = '1') then
           next_state <= frame_st;
+        end if;
+      when bs_fr_st =>
+        if (c_max_count /= bs_counter) then
+          next_state <= bs_st;
+        else
+          next_state <= ready_st;
+        end if;
+      when bs_st =>
+        next_state <= bs_counter_st;
+      when bs_counter_st =>
+        if (counter(counter'length - 1) = '1') then
+          next_state <= bs_fr_st;
         end if;
       when ready_st =>
         if (frame_data_1 /= frame_pattern or (frame2_fall = '1')) then
@@ -220,6 +236,7 @@ begin
   bitslip <= '0';
   valid <= '0';
   rst <= '0';
+  bs <= '0';
     case state is
       when idle => 
         rst <= '1';
@@ -229,9 +246,26 @@ begin
         valid <= '1';
       when rst_st =>
         rst <= '1';
+      when bs_st =>
+        bs <= '1';
       when others =>
     end case;
 end process;
+
+bs_counter_proc :
+process(gclk_1, state) 
+begin
+  if (state = idle) then
+    bs_counter <= (others => '0');
+  else
+    if rising_edge(gclk_1) then
+      if (bs = '1') then
+        bs_counter <= bs_counter + 1;
+      end if;
+    end if;
+  end if;
+end process;
+
 
 rst_counter_proc :
 process(gclk_1, state)
@@ -245,77 +279,107 @@ begin
   end if;
 end process;
 
+m1_strm_data <= da1(0) & db1(0) & da1(1) & db1(1) & da1(2) & db1(2) & da1(3) & db1(3);
+m2_strm_data <= da2(0) & db2(0) & da2(1) & db2(1) & da2(2) & db2(2) & da2(3) & db2(3);
+m1_strm_valid <= valid;
+m2_strm_valid <= valid;
 
-trigger_proc1 :
-process(gclk_1, reset)
+c_max_count_proc :
+process(gclk_1)
 begin
-  if (reset = '1') then
-    m1_strm_valid    <= '0';
-    m1_strm_data     <= (others => '0');
-  else
-    if rising_edge(gclk_1) then
-      m1_strm_valid <= valid;
-      data1_x2(64*2-1 downto 64) <= da1(0) & db1(0) & da1(1) & db1(1) & da1(2) & db1(2) & da1(3) & db1(3);
-      data1_x2(63 downto 0) <= data1_x2(64*2-1 downto 64);
-      m1_strm_data   <= data1_x2(63 downto 0);
-    end if;
+  if rising_edge(gclk_1) then
+    case frame_data_2 is 
+    when "00011110" =>
+      c_max_count <= "001";
+    when "00111100" =>
+      c_max_count <= "010";
+    when "01111000" =>
+      c_max_count <= "011";
+    when "11110000"=>
+      c_max_count <= "100";
+    when "11100001" =>
+      c_max_count <= "101";
+    when "11000011" =>
+      c_max_count <= "110";
+    when "10000111" =>
+      c_max_count <= "111";
+    when others =>
+      c_max_count <= "000";
+    end case;
   end if;
-end process;
+end process; 
 
-gen_proc_adc2 : for k in 0 to 3 generate
 
-trigger_proc2 :
-process(gclk_2, reset)
-begin
-  if (reset = '1') then
-    m2_strm_valid    <= '0';
-  else
-    if rising_edge(gclk_2) then
-      m2_strm_valid  <= valid;
-      da2_d(k)(15 downto 8) <= da2(k);
-      da2_d(k)(7 downto 0) <= da2_d(k)(15 downto 8);
-      db2_d(k)(15 downto 8) <= db2(k);
-      db2_d(k)(7 downto 0) <= db2_d(k)(15 downto 8);
-    end if;
-  end if;
-end process;
-end generate;
+--trigger_proc1 :
+--process(gclk_1, reset)
+--begin
+--  if (reset = '1') then
+--    m1_strm_valid    <= '0';
+--    m1_strm_data     <= (others => '0');
+--  else
+--    if rising_edge(gclk_1) then
+--      m1_strm_valid <= valid;
+--      data1_x2(64*2-1 downto 64) <= da1(0) & db1(0) & da1(1) & db1(1) & da1(2) & db1(2) & da1(3) & db1(3);
+--      data1_x2(63 downto 0) <= data1_x2(64*2-1 downto 64);
+--      m1_strm_data   <= data1_x2(63 downto 0);
+--    end if;
+--  end if;
+--end process;
 
-process(gclk_2, reset)
-begin
-  if (reset = '1') then
-    m2_strm_data     <= (others => '0');
-  else
-    if rising_edge(gclk_2) then
-       case frame_data_2 is
-        when "00011110" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 1 downto 1) & da2_d(1)(7 + 1 downto 1) & da2_d(2)(7 + 1 downto 1) & da2_d(3)(7 + 1 downto 1);
-          m2_strm_data(31 downto 0) <=  db2_d(0)(7 + 1 downto 1) & db2_d(1)(7 + 1 downto 1) & db2_d(2)(7 + 1 downto 1) & db2_d(3)(7 + 1 downto 1);
-        when "00111100" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 2 downto 2) & da2_d(1)(7 + 2 downto 2) & da2_d(2)(7 + 2 downto 2) & da2_d(3)(7 + 2 downto 2);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 2 downto 2) & db2_d(1)(7 + 2 downto 2) & db2_d(2)(7 + 2 downto 2) & db2_d(3)(7 + 2 downto 2);
-        when "01111000" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 3 downto 3) & da2_d(1)(7 + 3 downto 3) & da2_d(2)(7 + 3 downto 3) & da2_d(3)(7 + 3 downto 3);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 3 downto 3) & db2_d(1)(7 + 3 downto 3) & db2_d(2)(7 + 3 downto 3) & db2_d(3)(7 + 3 downto 3);
-        when "11110000"=>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 4 downto 4) & da2_d(1)(7 + 4 downto 4) & da2_d(2)(7 + 4 downto 4) & da2_d(3)(7 + 4 downto 4);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 4 downto 4) & db2_d(1)(7 + 4 downto 4) & db2_d(2)(7 + 4 downto 4) & db2_d(3)(7 + 4 downto 4);
-        when "11100001" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 5 downto 5) & da2_d(1)(7 + 5 downto 5) & da2_d(2)(7 + 5 downto 5) & da2_d(3)(7 + 5 downto 5);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 5 downto 5) & db2_d(1)(7 + 5 downto 5) & db2_d(2)(7 + 5 downto 5) & db2_d(3)(7 + 5 downto 5);
-        when "11000011" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 6 downto 6) & da2_d(1)(7 + 6 downto 6) & da2_d(2)(7 + 6 downto 6) & da2_d(3)(7 + 6 downto 6);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 6 downto 6) & db2_d(1)(7 + 6 downto 6) & db2_d(2)(7 + 6 downto 6) & db2_d(3)(7 + 6 downto 6);
-        when "10000111" =>
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 7 downto 7) & da2_d(1)(7 + 7 downto 7) & da2_d(2)(7 + 7 downto 7) & da2_d(3)(7 + 7 downto 7);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 7 downto 7) & db2_d(1)(7 + 7 downto 7) & db2_d(2)(7 + 7 downto 7) & db2_d(3)(7 + 7 downto 7);
-        when others => 
-          m2_strm_data(63 downto 32) <= da2_d(0)(7 downto 0) & da2_d(1)(7 downto 0) & da2_d(2)(7 downto 0) & da2_d(3)(7 downto 0);
-          m2_strm_data(31 downto 0)  <= db2_d(0)(7 downto 0) & db2_d(1)(7 downto 0) & db2_d(2)(7 downto 0) & db2_d(3)(7 downto 0);
-      end case;
-    end if;
-  end if;
-end process;
+--gen_proc_adc2 : for k in 0 to 3 generate
+
+--trigger_proc2 :
+--process(gclk_2, reset)
+--begin
+--  if (reset = '1') then
+--    m2_strm_valid    <= '0';
+--  else
+--    if rising_edge(gclk_2) then
+--      m2_strm_valid  <= valid;
+--      da2_d(k)(15 downto 8) <= da2(k);
+--      da2_d(k)(7 downto 0) <= da2_d(k)(15 downto 8);
+--      db2_d(k)(15 downto 8) <= db2(k);
+--      db2_d(k)(7 downto 0) <= db2_d(k)(15 downto 8);
+--    end if;
+--  end if;
+--end process;
+--end generate;
+
+--process(gclk_2, reset)
+--begin
+--  if (reset = '1') then
+--    m2_strm_data     <= (others => '0');
+--  else
+--    if rising_edge(gclk_2) then
+--       case frame_data_2 is
+--        when "00011110" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 1 downto 1) & da2_d(1)(7 + 1 downto 1) & da2_d(2)(7 + 1 downto 1) & da2_d(3)(7 + 1 downto 1);
+--          m2_strm_data(31 downto 0) <=  db2_d(0)(7 + 1 downto 1) & db2_d(1)(7 + 1 downto 1) & db2_d(2)(7 + 1 downto 1) & db2_d(3)(7 + 1 downto 1);
+--        when "00111100" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 2 downto 2) & da2_d(1)(7 + 2 downto 2) & da2_d(2)(7 + 2 downto 2) & da2_d(3)(7 + 2 downto 2);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 2 downto 2) & db2_d(1)(7 + 2 downto 2) & db2_d(2)(7 + 2 downto 2) & db2_d(3)(7 + 2 downto 2);
+--        when "01111000" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 3 downto 3) & da2_d(1)(7 + 3 downto 3) & da2_d(2)(7 + 3 downto 3) & da2_d(3)(7 + 3 downto 3);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 3 downto 3) & db2_d(1)(7 + 3 downto 3) & db2_d(2)(7 + 3 downto 3) & db2_d(3)(7 + 3 downto 3);
+--        when "11110000"=>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 4 downto 4) & da2_d(1)(7 + 4 downto 4) & da2_d(2)(7 + 4 downto 4) & da2_d(3)(7 + 4 downto 4);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 4 downto 4) & db2_d(1)(7 + 4 downto 4) & db2_d(2)(7 + 4 downto 4) & db2_d(3)(7 + 4 downto 4);
+--        when "11100001" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 5 downto 5) & da2_d(1)(7 + 5 downto 5) & da2_d(2)(7 + 5 downto 5) & da2_d(3)(7 + 5 downto 5);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 5 downto 5) & db2_d(1)(7 + 5 downto 5) & db2_d(2)(7 + 5 downto 5) & db2_d(3)(7 + 5 downto 5);
+--        when "11000011" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 6 downto 6) & da2_d(1)(7 + 6 downto 6) & da2_d(2)(7 + 6 downto 6) & da2_d(3)(7 + 6 downto 6);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 6 downto 6) & db2_d(1)(7 + 6 downto 6) & db2_d(2)(7 + 6 downto 6) & db2_d(3)(7 + 6 downto 6);
+--        when "10000111" =>
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 + 7 downto 7) & da2_d(1)(7 + 7 downto 7) & da2_d(2)(7 + 7 downto 7) & da2_d(3)(7 + 7 downto 7);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 + 7 downto 7) & db2_d(1)(7 + 7 downto 7) & db2_d(2)(7 + 7 downto 7) & db2_d(3)(7 + 7 downto 7);
+--        when others => 
+--          m2_strm_data(63 downto 32) <= da2_d(0)(7 downto 0) & da2_d(1)(7 downto 0) & da2_d(2)(7 downto 0) & da2_d(3)(7 downto 0);
+--          m2_strm_data(31 downto 0)  <= db2_d(0)(7 downto 0) & db2_d(1)(7 downto 0) & db2_d(2)(7 downto 0) & db2_d(3)(7 downto 0);
+--      end case;
+--    end if;
+--  end if;
+--end process;
 
 
 hscs1 : entity high_speed_clock_to_serdes
@@ -455,7 +519,7 @@ da_deser2 : entity data_deserializer
       calib_valid       => valida2(i),
       reset             => rst,
       result            => da2(i),
-      bitslip           => bitslip,
+      bitslip           => bitslip2,
       data_obuf         => open
     );
 
@@ -473,11 +537,12 @@ db_deser2 : entity data_deserializer
       calib_valid       => validb2(i),
       reset             => rst,
       result            => db2(i),
-      bitslip           => bitslip,
+      bitslip           => bitslip2,
       data_obuf         => open
     );
 
 end generate;
 
+bitslip2 <= (bitslip or bs);
 
 end Behavioral;
