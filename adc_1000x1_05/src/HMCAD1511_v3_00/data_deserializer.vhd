@@ -46,7 +46,8 @@ entity data_deserializer is
       calib_valid       : out std_logic;
       reset             : in std_logic;
       result            : out std_logic_vector(7 downto 0);
-      bitslip           : in std_logic
+      bitslip           : in std_logic;
+      data_obuf         : out std_logic
     );
 end data_deserializer;
 
@@ -54,6 +55,8 @@ architecture Behavioral of data_deserializer is
 
     type state_machine  is (idle, start_calib, delay_busy_fall, delay_rst_edge, counter_edge, slave_start_calib, slave_end_calib);
     signal state, next_state : state_machine;
+    type bs_state_machine is (idle, bs_st);
+    signal bs_state, bs_next_state : bs_state_machine;
     signal data_in      : std_logic;
     signal busys        : std_logic;
     signal busym        : std_logic;
@@ -68,10 +71,48 @@ architecture Behavioral of data_deserializer is
     signal delay_busy   : std_logic;
     signal delay_rst    : std_logic;
     signal counter      : std_logic_vector(10 downto 0);
+    signal bs           : std_logic;
 
 begin
-
+data_obuf <= data_in;
 delay_busy <= busym or busys;
+
+bs_sync_proc :
+process(reset, serdes_divclk)
+begin
+  if (reset = '1') then
+    bs_state <= idle;
+  elsif rising_edge(serdes_divclk) then
+    bs_state <= bs_next_state;
+  end if;
+end process;
+
+bs_next_state_proc :
+process(bs_state, bitslip)
+begin
+  bs_next_state <= bs_state;
+    case bs_state is
+      when idle => 
+        if (bitslip = '1') then
+          bs_next_state <= bs_st;
+        end if;
+      when bs_st =>
+        bs_next_state <= idle;
+      when others =>
+        bs_next_state <= idle;
+    end case;
+end process;
+
+bs_out_proc :
+process(bs_state)
+begin
+  bs <= '0';
+    case bs_state is
+      when bs_st =>
+        bs <= '1';
+      when others =>
+    end case;
+end process;
 
 counter_proc :
 process(serdes_divclk)
@@ -235,7 +276,7 @@ port map (
 	RST     		=> reset,
 	CLKDIV  		=> serdes_divclk,
 	SHIFTIN 		=> pd_edge,
-	BITSLIP 		=> bitslip,
+	BITSLIP 		=> bs,
 	FABRICOUT 		=> open,
 	Q4  			=> result(7),
 	Q3  			=> result(6),
@@ -264,7 +305,7 @@ port map (
 	RST     		=> reset,
 	CLKDIV  		=> serdes_divclk,
 	SHIFTIN 		=> cascade,
-	BITSLIP 		=> bitslip,
+	BITSLIP 		=> bs,
 	FABRICOUT 		=> open,
 	Q4  			=> result(3),
 	Q3  			=> result(2),

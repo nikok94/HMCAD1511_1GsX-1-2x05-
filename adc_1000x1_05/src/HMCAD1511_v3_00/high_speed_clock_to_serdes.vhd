@@ -36,8 +36,9 @@ entity high_speed_clock_to_serdes is
         S                   : integer := 8
         );
     Port (
-        clkin_p             : in std_logic;
-        clkin_n             : in std_logic;
+--        clkin_p             : in std_logic;
+--        clkin_n             : in std_logic;
+        clkin_ibufg         : in std_logic;
         gclk                : out std_logic;
         serdesclk0          : out std_logic;
         serdesclk1          : out std_logic;
@@ -47,19 +48,19 @@ end high_speed_clock_to_serdes;
 
 architecture Behavioral of high_speed_clock_to_serdes is
     signal div_clk          : std_logic;
-    signal clkin_ibufg      : std_logic;
+   -- signal clkin_ibufg      : std_logic;
 
 begin
 
-   IBUFGDS_inst : IBUFGDS
-   generic map (
-      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
-      IOSTANDARD => "DEFAULT")
-   port map (
-      O => clkin_ibufg,     -- Clock buffer output
-      I => clkin_p,         -- Diff_p clock buffer input
-      IB => clkin_n         -- Diff_n clock buffer input
-   );
+--   IBUFGDS_inst : IBUFGDS
+--   generic map (
+--      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
+--      IOSTANDARD => "DEFAULT")
+--   port map (
+--      O => clkin_ibufg,     -- Clock buffer output
+--      I => clkin_p,         -- Diff_p clock buffer input
+--      IB => clkin_n         -- Diff_n clock buffer input
+--   );
 
 div_clk_bufg_ins : BUFG port map ( I => div_clk, O => gclk );
 

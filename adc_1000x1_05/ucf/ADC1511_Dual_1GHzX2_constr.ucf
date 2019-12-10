@@ -21,7 +21,14 @@ NET "adc1_fclk_n" LOC = A6;
 NET "adc1_fclk_n" IOSTANDARD = LVDS_25;
 NET "adc1_fclk_n" DIFF_TERM = "TRUE";
 
-NET "adc1_data_receiver/hscs/gclk" TNM_NET = "lck1_div8";
+
+NET "Clock_gen_inst/clk_out_250MHz" TNM_NET = "clk250";
+TIMESPEC TS_clk250 = PERIOD "clk250" 4 ns HIGH 50 %;
+
+NET "Clock_gen_inst/clk_out_125MHz" TNM_NET = "clk125";
+TIMESPEC TS_clk125 = PERIOD "clk125" 8 ns HIGH 50 %;
+
+NET "adc_data_receiver/hscs1/gclk" TNM_NET = "lck1_div8";
 TIMESPEC TS_lck1_div8 = PERIOD "lck1_div8" 8 ns HIGH 50 %;
 
 NET "adc1_dx_a_p[0]" LOC = C4;
@@ -91,7 +98,7 @@ NET "adc2_lclk_n" LOC = E8;
 NET "adc2_lclk_n" IOSTANDARD = LVDS_25;
 NET "adc2_lclk_n" DIFF_TERM = "TRUE";
 
-NET "adc2_data_receiver/hscs/gclk" TNM_NET = "lck2_div8";
+NET "adc_data_receiver/hscs2/gclk" TNM_NET = "lck2_div8";
 TIMESPEC TS_lck2_div8 = PERIOD "lck2_div8" 8 ns HIGH 50 %;
 
 NET "adc2_fclk_p" LOC = E10;
@@ -177,11 +184,6 @@ NET "adc_calib_done" IOSTANDARD = LVCMOS33;
 NET "main_pll_lock" LOC = L12;
 NET "main_pll_lock" IOSTANDARD = LVCMOS33;
 
-
-#NET "pulse_out_n" LOC = B15;
-NET "pulse_out_p" IOSTANDARD = LVCMOS33;
-#NET "pulse_out_n" IOSTANDARD = LVCMOS33;
-
 #############################################################################
 ## SPI
 #############################################################################
@@ -199,6 +201,8 @@ NET "fpga_sck" IOSTANDARD = LVCMOS33;
 ## QSPI
 ###############################################################################
 
+
+
 NET "spifi_cs" LOC = F2;
 NET "spifi_cs" IOSTANDARD = LVCMOS33;
 NET "spifi_sck" LOC = H3;
@@ -212,8 +216,6 @@ NET "spifi_sio2" IOSTANDARD = LVCMOS33;
 NET "spifi_sio3" LOC = H1;
 NET "spifi_sio3" IOSTANDARD = LVCMOS33;
 
-#PIN "adc1_data_receiver/high_speed_clock_to_serdes_inst/div_clk_bufg_ins.O" CLOCK_DEDICATED_ROUTE = FALSE;
-#PIN "adc2_data_receiver/high_speed_clock_to_serdes_inst/div_clk_bufg_ins.O" CLOCK_DEDICATED_ROUTE = FALSE;
-PIN "fpga_sck_IBUF_BUFG.O" CLOCK_DEDICATED_ROUTE = FALSE;
-
+NET "pulse_out_p" IOSTANDARD = DIFF_SSTL3_II;
+NET "pulse_out_n" LOC = B16;
 NET "pulse_out_p" LOC = B15;

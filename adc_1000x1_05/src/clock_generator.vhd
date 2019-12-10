@@ -33,11 +33,12 @@ use UNISIM.VComponents.all;
 
 entity clock_generator is
     Port ( 
-      clk_in        : in std_logic;
-      rst_in        : in std_logic;
-      pll_lock      : out std_logic;
-      clk_out_125MHz: out std_logic;
-      rst_out       : out std_logic
+      clk_in            : in std_logic;
+      rst_in            : in std_logic;
+      pll_lock          : out std_logic;
+      clk_out_125MHz    : out std_logic;
+      clk_out_250MHz    : out std_logic;
+      rst_out           : out std_logic
     );
 end clock_generator;
 
@@ -121,7 +122,7 @@ pll_lock <= LOCKED;
 
 bufg1_inst : BUFG port map ( I => CLKFBOUT, O => CLKFBOUT_bufg);
 bufg2_inst : BUFG port map ( I => pll_clkout_0, O => clk_out_125MHz);
---bufg3_inst : BUFG port map ( I => pll_clkout_1, O => clk_out_250MHz);
+bufg3_inst : BUFG port map ( I => pll_clkout_1, O => clk_out_250MHz);
 --bufg4_inst : BUFG port map ( I => pll_clkout_2, O => clk_out_100MHz);
 --bufg5_inst : BUFG port map ( I => pll_clkout_3, O => clk_out_100MHz_180);
 --bufg3_inst : BUFG port map ( I => rst, O => rst_out);

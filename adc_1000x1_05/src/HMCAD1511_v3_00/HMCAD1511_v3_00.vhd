@@ -26,6 +26,7 @@ use IEEE.STD_LOGIC_unsigned.ALL;
 library work;
 use work.data_deserializer;
 use work.high_speed_clock_to_serdes;
+use work.deser;
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -33,8 +34,8 @@ use work.high_speed_clock_to_serdes;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx primitives in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
+library UNISIM;
+use UNISIM.VComponents.all;
 
 entity HMCAD1511_v3_00 is
     generic (
@@ -55,7 +56,16 @@ entity HMCAD1511_v3_00 is
       reset                 : in std_logic;
       m_strm_valid          : out std_logic;
       m_strm_data           : out std_logic_vector(63 downto 0);
-      divclk_out            : out std_logic
+
+      bsleep_counter        : out std_logic_vector(3 downto 0);
+      gclk_o                : out std_logic;
+      serdesclk0_o          : out std_logic;
+      serdesclk1_o          : out std_logic;
+      serdesstrobe_o        : out std_logic;
+      
+      frame                 : out std_logic_vector(7 downto 0);
+      lclk_obuf             : out std_logic;
+      fclk_obuf             : out std_logic
     );
 end HMCAD1511_v3_00;
 
@@ -78,9 +88,32 @@ architecture Behavioral of HMCAD1511_v3_00 is
     signal valid            : std_logic;
     signal rst              : std_logic;
     signal rst_counter      : std_logic_vector(3 downto 0);
+    signal bitsleep_counter : std_logic_vector(3 downto 0);
+    signal lclk             : std_logic;
+    signal frame_obuf       : std_logic;
 
 
 begin
+
+bsleep_counter <= bitsleep_counter;
+
+gclk_o         <= gclk;
+serdesclk0_o   <= serdesclk0;
+serdesclk1_o   <= serdesclk1;
+serdesstrobe_o <= serdesstrobe;
+
+IBUFGDS1_inst : IBUFGDS
+   generic map (
+      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
+      IOSTANDARD => "DEFAULT")
+   port map (
+      O => lclk,     -- Clock buffer output
+      I => LCLKp,         -- Diff_p clock buffer input
+      IB => LCLKn         -- Diff_n clock buffer input
+   );
+
+lclk_obuf <= lclk;
+
 counter_proc :
 process(gclk)
 begin
@@ -89,6 +122,18 @@ begin
       counter <= counter + 1;
     else
       counter <= (others => '0');
+    end if;
+  end if;
+end process;
+
+bitsleep_counter_proc :
+process(state, gclk)
+begin
+  if (state = idle) then
+    bitsleep_counter <= (others => '0');
+  elsif rising_edge(gclk) then
+    if (bitslip = '1') then
+      bitsleep_counter <= bitsleep_counter + 1;
     end if;
   end if;
 end process;
@@ -160,9 +205,6 @@ begin
     end case;
 end process;
 
-
-divclk_out <= gclk;
-
 rst_counter_proc :
 process(gclk, state)
 begin
@@ -195,8 +237,9 @@ hscs : entity high_speed_clock_to_serdes
       S                   => 8
       )
     Port map(
-      clkin_p             => LCLKp,
-      clkin_n             => LCLKn,
+--      clkin_p             => LCLKp,
+--      clkin_n             => LCLKn,
+      clkin_ibufg         => LCLK,
       gclk                => gclk,
       serdesclk0          => serdesclk0,
       serdesclk1          => serdesclk1,
@@ -217,7 +260,26 @@ frame_deser : entity data_deserializer
       calib_valid       => valid_fr,
       reset             => rst,
       result            => frame_data,
-      bitslip           => bitslip
+      bitslip           => bitslip,
+      data_obuf         => frame_obuf
+    );
+
+fclk_obuf <= frame_obuf;
+
+frame_deser_1 : entity deser
+    generic map(
+      DIFF_TERM         => DIFF_TERM
+    )
+    Port map(
+      serdes_clk0       => serdesclk0,
+      serdes_clk1       => serdesclk1,
+      serdes_divclk     => gclk,
+      serdes_strobe     => serdesstrobe,
+      data_in           => frame_obuf,
+      calib_valid       => open,
+      reset             => '0',
+      result            => frame,
+      bitslip           => '0'
     );
 
 generate_proc : for i in 0 to 3 generate
@@ -235,7 +297,8 @@ da_deser : entity data_deserializer
       calib_valid       => valida(i),
       reset             => rst,
       result            => da(i),
-      bitslip           => bitslip
+      bitslip           => bitslip,
+      data_obuf         => open
     );
 
 db_deser : entity data_deserializer 
@@ -252,7 +315,8 @@ db_deser : entity data_deserializer
       calib_valid       => validb(i),
       reset             => rst,
       result            => db(i),
-      bitslip           => bitslip
+      bitslip           => bitslip,
+      data_obuf         => open
     );
 
 end generate;
