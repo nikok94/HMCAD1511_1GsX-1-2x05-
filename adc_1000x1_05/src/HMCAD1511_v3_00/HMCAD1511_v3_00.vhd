@@ -83,7 +83,7 @@ architecture Behavioral of HMCAD1511_v3_00 is
     signal counter          : std_logic_vector(4 downto 0);
     signal frame_data       : std_logic_vector(7 downto 0);
     signal bitslip          : std_logic;
-    type state_machine is (idle, frame_st, bitslip_st, counter_st, ready_st, rst_st, rst_cont_st);
+    type state_machine is (idle, frame_st, bitslip_st, counter_st, ready_st, rst_st, rst_cont_st, save_frame);
     signal state, next_state : state_machine;
     signal valid            : std_logic;
     signal rst              : std_logic;
@@ -113,6 +113,18 @@ IBUFGDS1_inst : IBUFGDS
    );
 
 lclk_obuf <= lclk;
+
+save_frame_process :
+process(state, gclk)
+begin
+  if (state = idle) then
+    frame <= (others => '0');
+  elsif rising_edge(gclk) then
+    if (state = save_frame) then
+      frame <= frame_data;
+    end if;
+  end if;
+end process;
 
 counter_proc :
 process(gclk)
@@ -155,6 +167,8 @@ begin
     case state is
       when idle =>
         next_state <= rst_st;
+      when save_frame =>
+        next_state <= frame_st;
       when frame_st =>
         if (valid_fr = '1') then
           if (frame_data = frame_pattern) then
@@ -179,7 +193,7 @@ begin
         end if;
       when rst_cont_st =>
         if (valid_fr = '1') and (validb = "1111") and (valida = "1111") then
-          next_state <= frame_st;
+          next_state <= save_frame;
         end if;
       when others =>
         next_state <= idle;

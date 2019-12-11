@@ -258,97 +258,97 @@ main_pll_lock <= pll_lock;
 
 adc_calib_done <= adc1_valid and adc2_valid;
 
---adc1_data_receiver : entity HMCAD1511_v3_00
---    Port map(
---      LCLKp                 => adc1_lclk_p,
---      LCLKn                 => adc1_lclk_n,
---
---      FCLKp                 => adc1_fclk_p,
---      FCLKn                 => adc1_fclk_n,
---
---      DxXAp                 => adc1_dx_a_p,
---      DxXAn                 => adc1_dx_a_n,
---      DxXBp                 => adc1_dx_b_p,
---      DxXBn                 => adc1_dx_b_n,
---      
---      reset                 => rst,
---      m_strm_valid          => adc1_valid,
---      m_strm_data           => adc1_data,
---      bsleep_counter        => bitsleep_counter1,
---      gclk_o                => adc1_clk_div8,
---      serdesclk0_o          => serdesclk0_1,
---      serdesclk1_o          => serdesclk1_1,
---      serdesstrobe_o        => serdesstrobe_1,
---      
---      frame                 => frame1,
---      lclk_obuf             => lclk1,
---      fclk_obuf             => fclk1
---    );
---
---
---adc2_data_receiver : entity HMCAD1511_v3_00
---    Port map(
---      LCLKp                 => adc2_lclk_p,
---      LCLKn                 => adc2_lclk_n,
---
---      FCLKp                 => adc2_fclk_p,
---      FCLKn                 => adc2_fclk_n,
---
---      DxXAp                 => adc2_dx_a_p,
---      DxXAn                 => adc2_dx_a_n,
---      DxXBp                 => adc2_dx_b_p,
---      DxXBn                 => adc2_dx_b_n,
---
---      reset                 => rst,
---      m_strm_valid          => adc2_valid,
---      m_strm_data           => adc2_data,
---      bsleep_counter        => bitsleep_counter2,
---      gclk_o                => adc2_clk_div8,
---      serdesclk0_o          => serdesclk0_2,
---      serdesclk1_o          => serdesclk1_2,
---      serdesstrobe_o        => serdesstrobe_2,
---
---      frame                 => frame2,
---      lclk_obuf             => lclk2,
---      fclk_obuf             => fclk2
---    );
-
-adc_data_receiver   :  entity HMCAD1511_x2_v1_00
+adc1_data_receiver : entity HMCAD1511_v3_00
     Port map(
-      LCLKp_1               => adc1_lclk_p,
-      LCLKn_1               => adc1_lclk_n,
-                            
-      FCLKp_1               => adc1_fclk_p,
-      FCLKn_1               => adc1_fclk_n,
-                            
-      DxXAp_1               => adc1_dx_a_p,
-      DxXAn_1               => adc1_dx_a_n,
-      DxXBp_1               => adc1_dx_b_p,
-      DxXBn_1               => adc1_dx_b_n,
+      LCLKp                 => adc1_lclk_p,
+      LCLKn                 => adc1_lclk_n,
 
-      LCLKp_2               => adc2_lclk_p,
-      LCLKn_2               => adc2_lclk_n,
-                            
-      FCLKp_2               => adc2_fclk_p,
-      FCLKn_2               => adc2_fclk_n,
-                            
-      DxXAp_2               => adc2_dx_a_p,
-      DxXAn_2               => adc2_dx_a_n,
-      DxXBp_2               => adc2_dx_b_p,
-      DxXBn_2               => adc2_dx_b_n,
+      FCLKp                 => adc1_fclk_p,
+      FCLKn                 => adc1_fclk_n,
+
+      DxXAp                 => adc1_dx_a_p,
+      DxXAn                 => adc1_dx_a_n,
+      DxXBp                 => adc1_dx_b_p,
+      DxXBn                 => adc1_dx_b_n,
+      
+      reset                 => rst,
+      m_strm_valid          => adc1_valid,
+      m_strm_data           => adc1_data,
+      bsleep_counter        => bitsleep_counter1,
+      gclk_o                => adc1_clk_div8,
+      serdesclk0_o          => serdesclk0_1,
+      serdesclk1_o          => serdesclk1_1,
+      serdesstrobe_o        => serdesstrobe_1,
+      
+      frame                 => frame1,
+      lclk_obuf             => lclk1,
+      fclk_obuf             => fclk1
+    );
+
+
+adc2_data_receiver : entity HMCAD1511_v3_00
+    Port map(
+      LCLKp                 => adc2_lclk_p,
+      LCLKn                 => adc2_lclk_n,
+
+      FCLKp                 => adc2_fclk_p,
+      FCLKn                 => adc2_fclk_n,
+
+      DxXAp                 => adc2_dx_a_p,
+      DxXAn                 => adc2_dx_a_n,
+      DxXBp                 => adc2_dx_b_p,
+      DxXBn                 => adc2_dx_b_n,
 
       reset                 => rst,
-      m1_clk_o              => adc1_clk_div8,
-      m1_strm_valid         => adc1_valid,
-      m1_strm_data          => adc1_data,
-      
-      m2_clk_o              => adc2_clk_div8,
-      m2_strm_valid         => adc2_valid,
-      m2_strm_data          => adc2_data,
-      
-      frame_patter1         => frame1,
-      frame_patter2         => frame2
+      m_strm_valid          => adc2_valid,
+      m_strm_data           => adc2_data,
+      bsleep_counter        => bitsleep_counter2,
+      gclk_o                => adc2_clk_div8,
+      serdesclk0_o          => serdesclk0_2,
+      serdesclk1_o          => serdesclk1_2,
+      serdesstrobe_o        => serdesstrobe_2,
+
+      frame                 => frame2,
+      lclk_obuf             => lclk2,
+      fclk_obuf             => fclk2
     );
+
+--adc_data_receiver   :  entity HMCAD1511_x2_v1_00
+--    Port map(
+--      LCLKp_1               => adc1_lclk_p,
+--      LCLKn_1               => adc1_lclk_n,
+--                            
+--      FCLKp_1               => adc1_fclk_p,
+--      FCLKn_1               => adc1_fclk_n,
+--                            
+--      DxXAp_1               => adc1_dx_a_p,
+--      DxXAn_1               => adc1_dx_a_n,
+--      DxXBp_1               => adc1_dx_b_p,
+--      DxXBn_1               => adc1_dx_b_n,
+--
+--      LCLKp_2               => adc2_lclk_p,
+--      LCLKn_2               => adc2_lclk_n,
+--                            
+--      FCLKp_2               => adc2_fclk_p,
+--      FCLKn_2               => adc2_fclk_n,
+--                            
+--      DxXAp_2               => adc2_dx_a_p,
+--      DxXAn_2               => adc2_dx_a_n,
+--      DxXBp_2               => adc2_dx_b_p,
+--      DxXBn_2               => adc2_dx_b_n,
+--
+--      reset                 => rst,
+--      m1_clk_o              => adc1_clk_div8,
+--      m1_strm_valid         => adc1_valid,
+--      m1_strm_data          => adc1_data,
+--      
+--      m2_clk_o              => adc2_clk_div8,
+--      m2_strm_valid         => adc2_valid,
+--      m2_strm_data          => adc2_data,
+--      
+--      frame_patter1         => frame1,
+--      frame_patter2         => frame2
+--    );
 
 all_fifo_rst <= (not (adc2_valid and adc1_valid)) or rst;
 
