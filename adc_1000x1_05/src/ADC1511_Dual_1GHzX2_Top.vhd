@@ -25,7 +25,7 @@ use IEEE.STD_LOGIC_unsigned.ALL;
 
 library work;
 use work.HMCAD1511_v3_00;
-use work.HMCAD1511_x2_v1_00;
+--use work.HMCAD1511_x2_v1_00;
 use work.clock_generator;
 use work.spi_adc_250x4_master;
 --use work.fifo_sream;
@@ -34,6 +34,7 @@ use work.trigger_capture;
 --use work.data_capture_module;
 use work.data_capture;
 use work.QuadSPI_adc_250x4_module;
+use work.high_speed_clock_to_serdes;
 --use work.ila;
 --use work.ila_data_in;
 --use work.icon;
@@ -91,6 +92,9 @@ entity ADC1511_Dual_1GHzX2_Top is
         spifi_mosi              : inout std_logic;
         spifi_sio2              : inout std_logic;
         spifi_sio3              : inout std_logic;
+        
+        --fclk_div1               : out std_logic;
+        --fclk_div2               : out std_logic;
         
         fpga_sck                : in std_logic;
         fpga_cs                 : in std_logic;
@@ -232,15 +236,31 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal all_fifo_rst                 : std_logic;
     signal frame1                       : std_logic_vector(7 downto 0);
     signal frame2                       : std_logic_vector(7 downto 0);
+    signal frame1_s1                    : std_logic_vector(7 downto 0);
+    signal frame2_s1                    : std_logic_vector(7 downto 0);
+    signal frame1_s2                    : std_logic_vector(7 downto 0);
+    signal frame2_s2                    : std_logic_vector(7 downto 0);
+    
     signal serdesclk0_1                 : std_logic;
     signal serdesclk1_1                 : std_logic;
     signal serdesstrobe_1               : std_logic;
     signal serdesclk0_2                 : std_logic;
     signal serdesclk1_2                 : std_logic;
     signal serdesstrobe_2               : std_logic;
+    signal gclk                         : std_logic;
+    signal serdesclk0                   : std_logic;
+    signal serdesclk1                   : std_logic;
+    signal serdesstrobe                 : std_logic;
+    signal nvalid_counter               : std_logic_vector(15 downto 0);
+    signal nvalid_counter_msb_d         : std_logic;
+    signal fclk_div1                    : std_logic;
+    signal fclk_div2                    : std_logic;
+    signal counter1                     : std_logic_vector(7 downto 0):=(others => '0');
+    signal counter2                     : std_logic_vector(7 downto 0):=(others => '0');
+
 begin
 
-rst <= infrst_rst_out or control_reg(1);
+rst <= infrst_rst_out or control_reg(1) or adc_receiver_rst;
 
 sys_rst <= (not xc_sys_rstn);
 
@@ -256,13 +276,77 @@ Clock_gen_inst : entity clock_generator
 
 main_pll_lock <= pll_lock;
 
-adc_calib_done <= adc1_valid and adc2_valid;
+adc_calib_done_proc :
+process(clk_125MHz, rst)
+begin
+  if (rst = '1') then
+    adc_calib_done <= '0';
+  elsif rising_edge(clk_125MHz) then
+    if all_fifo_valid = '1' then
+      adc_calib_done <= '1';
+    end if;
+  end if;
+end process;
+
+IBUFGDS1_inst : IBUFGDS
+   generic map (
+      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
+      IOSTANDARD => "DEFAULT")
+   port map (
+      O => lclk1,     -- Clock buffer output
+      I => adc1_lclk_p,         -- Diff_p clock buffer input
+      IB => adc1_lclk_n         -- Diff_n clock buffer input
+   );
+
+hscs1 : entity high_speed_clock_to_serdes
+    Generic map (
+      S                   => 8
+      )
+    Port map(
+      clkin_ibufg         => lclk2,
+      gclk                => adc1_clk_div8,
+      serdesclk0          => serdesclk0_1,
+      serdesclk1          => serdesclk1_1,
+      serdesstrobe        => serdesstrobe_1
+    );
+
+
+--adc1_clk_div8    <= gclk;
+--serdesclk0_1     <= serdesclk0;
+--serdesclk1_1     <= serdesclk1;
+--serdesstrobe_1   <= serdesstrobe;
+
+IBUFGDS2_inst : IBUFGDS
+   generic map (
+      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
+      IOSTANDARD => "DEFAULT")
+   port map (
+      O => lclk2,     -- Clock buffer output
+      I => adc2_lclk_p,         -- Diff_p clock buffer input
+      IB => adc2_lclk_n         -- Diff_n clock buffer input
+   );
+
+
+hscs2 : entity high_speed_clock_to_serdes
+    Generic map (
+      S                   => 8
+      )
+    Port map(
+      clkin_ibufg         => lclk2,
+      gclk                => adc2_clk_div8,
+      serdesclk0          => serdesclk0_2,
+      serdesclk1          => serdesclk1_2,
+      serdesstrobe        => serdesstrobe_2
+    );
+
+
+--adc2_clk_div8    <= adc1_clk_div8;
+--serdesclk0_2     <= serdesclk0_1;
+--serdesclk1_2     <= serdesclk1_1;
+--serdesstrobe_2   <= serdesstrobe_1;
 
 adc1_data_receiver : entity HMCAD1511_v3_00
     Port map(
-      LCLKp                 => adc1_lclk_p,
-      LCLKn                 => adc1_lclk_n,
-
       FCLKp                 => adc1_fclk_p,
       FCLKn                 => adc1_fclk_n,
 
@@ -275,22 +359,26 @@ adc1_data_receiver : entity HMCAD1511_v3_00
       m_strm_valid          => adc1_valid,
       m_strm_data           => adc1_data,
       bsleep_counter        => bitsleep_counter1,
-      gclk_o                => adc1_clk_div8,
-      serdesclk0_o          => serdesclk0_1,
-      serdesclk1_o          => serdesclk1_1,
-      serdesstrobe_o        => serdesstrobe_1,
-      
+
+      gclk                  => adc1_clk_div8,
+      serdesclk0            => serdesclk0_1,
+      serdesclk1            => serdesclk1_1,
+      serdesstrobe          => serdesstrobe_1,
+
       frame                 => frame1,
-      lclk_obuf             => lclk1,
-      fclk_obuf             => fclk1
+      fclk_div              => fclk_div1
     );
+
+counter1_proc : process(fclk_div1)
+begin
+  if rising_edge(fclk_div1) then
+    counter1 <= counter1 + 1;
+  end if;
+end process;
 
 
 adc2_data_receiver : entity HMCAD1511_v3_00
     Port map(
-      LCLKp                 => adc2_lclk_p,
-      LCLKn                 => adc2_lclk_n,
-
       FCLKp                 => adc2_fclk_p,
       FCLKn                 => adc2_fclk_n,
 
@@ -303,52 +391,46 @@ adc2_data_receiver : entity HMCAD1511_v3_00
       m_strm_valid          => adc2_valid,
       m_strm_data           => adc2_data,
       bsleep_counter        => bitsleep_counter2,
-      gclk_o                => adc2_clk_div8,
-      serdesclk0_o          => serdesclk0_2,
-      serdesclk1_o          => serdesclk1_2,
-      serdesstrobe_o        => serdesstrobe_2,
+      gclk                  => adc2_clk_div8,
+      serdesclk0            => serdesclk0_2,
+      serdesclk1            => serdesclk1_2,
+      serdesstrobe          => serdesstrobe_2,
 
       frame                 => frame2,
-      lclk_obuf             => lclk2,
-      fclk_obuf             => fclk2
+      fclk_div              => fclk_div2
     );
 
---adc_data_receiver   :  entity HMCAD1511_x2_v1_00
---    Port map(
---      LCLKp_1               => adc1_lclk_p,
---      LCLKn_1               => adc1_lclk_n,
---                            
---      FCLKp_1               => adc1_fclk_p,
---      FCLKn_1               => adc1_fclk_n,
---                            
---      DxXAp_1               => adc1_dx_a_p,
---      DxXAn_1               => adc1_dx_a_n,
---      DxXBp_1               => adc1_dx_b_p,
---      DxXBn_1               => adc1_dx_b_n,
---
---      LCLKp_2               => adc2_lclk_p,
---      LCLKn_2               => adc2_lclk_n,
---                            
---      FCLKp_2               => adc2_fclk_p,
---      FCLKn_2               => adc2_fclk_n,
---                            
---      DxXAp_2               => adc2_dx_a_p,
---      DxXAn_2               => adc2_dx_a_n,
---      DxXBp_2               => adc2_dx_b_p,
---      DxXBn_2               => adc2_dx_b_n,
---
---      reset                 => rst,
---      m1_clk_o              => adc1_clk_div8,
---      m1_strm_valid         => adc1_valid,
---      m1_strm_data          => adc1_data,
---      
---      m2_clk_o              => adc2_clk_div8,
---      m2_strm_valid         => adc2_valid,
---      m2_strm_data          => adc2_data,
---      
---      frame_patter1         => frame1,
---      frame_patter2         => frame2
---    );
+counter2_proc : process(fclk_div2)
+begin
+  if rising_edge(fclk_div2) then
+    counter2 <= counter2 + 1;
+  end if;
+end process;
+
+nvalid_counter_proc:
+process(clk_125MHz, rst)
+begin
+    if (rst = '1') then
+      nvalid_counter <= (others => '0');
+    elsif rising_edge(clk_125MHz) then
+      if (all_fifo_valid = '0') then
+        if (nvalid_counter(nvalid_counter'length - 1) = '0') then
+          nvalid_counter <= nvalid_counter + 1;
+        end if;
+      else
+        nvalid_counter <= (others => '0');
+      end if;
+    end if;
+end process;
+
+nvalid_counter_msb_d_proc :
+process(clk_125MHz)
+begin
+    if rising_edge(clk_125MHz) then
+      nvalid_counter_msb_d <= nvalid_counter(nvalid_counter'length - 1);
+      adc_receiver_rst <= (nvalid_counter(nvalid_counter'length - 1)) and (not nvalid_counter_msb_d);
+    end if;
+end process;
 
 all_fifo_rst <= (not (adc2_valid and adc1_valid)) or rst;
 
@@ -689,23 +771,6 @@ m_fcb_wr_process :
       end if;
     end process;
 
-adc_receivers_rst_proc :
-    process(clk_125MHz, rst)
-    begin
-      if (rst = '1') then
-        adc_receiver_rst_vect <= (others => '0');
-      elsif rising_edge(clk_125MHz) then
-        if control_reg(5) = '1' then
-          adc_receiver_rst_vect <= (others => '1');
-        else
-          adc_receiver_rst_vect(7 downto 1) <= adc_receiver_rst_vect(6 downto 0);
-          adc_receiver_rst_vect(0) <= '0';
-        end if;
-      end if;
-    end process;
-
-adc_receiver_rst    <= adc_receiver_rst_vect(7);
-
 --OBUF_inst : OBUF
 --   generic map (
 --      DRIVE => 8,
@@ -747,8 +812,7 @@ m_fcb_rd_process :
     process(clk_125MHz)
     begin
       if rising_edge(clk_125MHz) then
-        if (infrst_rst_out = '1') then
-        elsif (m_fcb_rdreq = '1') then
+        if (m_fcb_rdreq = '1') then
           m_fcb_rdack <= '1';
           case reg_address_int is
             when 0 => 
@@ -767,7 +831,9 @@ m_fcb_rd_process :
             when 5 => 
               m_fcb_rddata <= low_adc_buff_len;
             when 6 =>
-              m_fcb_rddata(15 downto 0) <= frame2 & frame1;
+              m_fcb_rddata(15 downto 0) <= frame2_s2 & frame1_s2;
+            when 7 =>
+              m_fcb_rddata(15 downto 0) <= counter2 & counter1;
             when others =>
           end case;
         else 
@@ -775,6 +841,17 @@ m_fcb_rd_process :
         end if;
       end if;
     end process;
+
+process(clk_125MHz) 
+begin
+  if rising_edge(clk_125MHz) then
+    frame1_s1 <= frame1;
+    frame2_s1 <= frame2;
+    frame1_s2 <= frame1_s1;
+    frame2_s2 <= frame2_s1;
+  end if;
+end process;
+
 
 --ila1_inst : ENTITY ila
 --  port map(

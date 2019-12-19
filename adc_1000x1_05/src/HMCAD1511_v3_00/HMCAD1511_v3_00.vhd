@@ -42,8 +42,13 @@ entity HMCAD1511_v3_00 is
       DIFF_TERM         : boolean := true
     );
     Port (
-      LCLKp                 : in std_logic;
-      LCLKn                 : in std_logic;
+      --LCLKp                 : in std_logic;
+      --LCLKn                 : in std_logic;
+      
+      gclk                  : in std_logic;
+      serdesclk0            : in std_logic;
+      serdesclk1            : in std_logic;
+      serdesstrobe          : in std_logic;
 
       FCLKp                 : in std_logic;
       FCLKn                 : in std_logic;
@@ -58,23 +63,20 @@ entity HMCAD1511_v3_00 is
       m_strm_data           : out std_logic_vector(63 downto 0);
 
       bsleep_counter        : out std_logic_vector(3 downto 0);
-      gclk_o                : out std_logic;
-      serdesclk0_o          : out std_logic;
-      serdesclk1_o          : out std_logic;
-      serdesstrobe_o        : out std_logic;
       
       frame                 : out std_logic_vector(7 downto 0);
-      lclk_obuf             : out std_logic;
-      fclk_obuf             : out std_logic
+      fclk_div              : out std_logic--;
+--      lclk_obuf             : out std_logic;
+--      fclk_obuf             : out std_logic
     );
 end HMCAD1511_v3_00;
 
 architecture Behavioral of HMCAD1511_v3_00 is
     constant frame_pattern  : std_logic_vector(7 downto 0):= x"0f";
-    signal gclk             : std_logic;
-    signal serdesclk0       : std_logic;
-    signal serdesclk1       : std_logic;
-    signal serdesstrobe     : std_logic;
+    --signal gclk             : std_logic;
+    --signal serdesclk0       : std_logic;
+    --signal serdesclk1       : std_logic;
+    --signal serdesstrobe     : std_logic;
     signal valid_fr         : std_logic;
     signal valida           : std_logic_vector(3 downto 0);
     signal validb           : std_logic_vector(3 downto 0);
@@ -91,28 +93,24 @@ architecture Behavioral of HMCAD1511_v3_00 is
     signal bitsleep_counter : std_logic_vector(3 downto 0);
     signal lclk             : std_logic;
     signal frame_obuf       : std_logic;
+    signal fclk_div_bufio   : std_logic;
+    signal bufh_o           : std_logic;
 
 
 begin
 
 bsleep_counter <= bitsleep_counter;
 
-gclk_o         <= gclk;
-serdesclk0_o   <= serdesclk0;
-serdesclk1_o   <= serdesclk1;
-serdesstrobe_o <= serdesstrobe;
+--IBUFGDS1_inst : IBUFGDS
+--   generic map (
+--      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
+--      IOSTANDARD => "DEFAULT")
+--   port map (
+--      O => lclk,     -- Clock buffer output
+--      I => LCLKp,         -- Diff_p clock buffer input
+--      IB => LCLKn         -- Diff_n clock buffer input
+--   );
 
-IBUFGDS1_inst : IBUFGDS
-   generic map (
-      IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
-      IOSTANDARD => "DEFAULT")
-   port map (
-      O => lclk,     -- Clock buffer output
-      I => LCLKp,         -- Diff_p clock buffer input
-      IB => LCLKn         -- Diff_n clock buffer input
-   );
-
-lclk_obuf <= lclk;
 
 save_frame_process :
 process(state, gclk)
@@ -168,7 +166,7 @@ begin
       when idle =>
         next_state <= rst_st;
       when save_frame =>
-        next_state <= frame_st;
+          next_state <= frame_st;
       when frame_st =>
         if (valid_fr = '1') then
           if (frame_data = frame_pattern) then
@@ -185,7 +183,7 @@ begin
         end if;
       when ready_st =>
         if (frame_data /= frame_pattern) then
-          next_state <= rst_st;
+          next_state <= idle;
         end if;
       when rst_st =>
         if rst_counter(rst_counter'length - 1) = '1' then
@@ -246,20 +244,20 @@ begin
   end if;
 end process;
 
-hscs : entity high_speed_clock_to_serdes
-    Generic map (
-      S                   => 8
-      )
-    Port map(
---      clkin_p             => LCLKp,
---      clkin_n             => LCLKn,
-      clkin_ibufg         => LCLK,
-      gclk                => gclk,
-      serdesclk0          => serdesclk0,
-      serdesclk1          => serdesclk1,
-      serdesstrobe        => serdesstrobe
-    );
-    
+--hscs : entity high_speed_clock_to_serdes
+--    Generic map (
+--      S                   => 8
+--      )
+--    Port map(
+----      clkin_p             => LCLKp,
+----      clkin_n             => LCLKn,
+--      clkin_ibufg         => LCLK,
+--      gclk                => gclk,
+--      serdesclk0          => serdesclk0,
+--      serdesclk1          => serdesclk1,
+--      serdesstrobe        => serdesstrobe
+--    );
+
 frame_deser : entity data_deserializer 
     generic map (
       DIFF_TERM         => DIFF_TERM
@@ -277,8 +275,27 @@ frame_deser : entity data_deserializer
       bitslip           => bitslip,
       data_obuf         => frame_obuf
     );
+    
 
-fclk_obuf <= frame_obuf;
+
+BUFIO2_clk0_inst : BUFIO2
+   generic map (
+      DIVIDE => 8,           -- DIVCLK divider (1,3-8)
+      DIVIDE_BYPASS => FALSE, -- Bypass the divider circuitry (TRUE/FALSE)
+      I_INVERT => FALSE,     -- Invert clock (TRUE/FALSE)
+      USE_DOUBLER => TRUE   -- Use doubler circuitry (TRUE/FALSE)
+   )
+   port map (
+      DIVCLK => fclk_div_bufio,             -- 1-bit output: Divided clock output
+      IOCLK => open,               -- 1-bit output: I/O output clock
+      SERDESSTROBE => open, -- 1-bit output: Output SERDES strobe (connect to ISERDES2/OSERDES2)
+      I => frame_obuf                        -- 1-bit input: Clock input (connect to IBUFG)
+   );
+
+
+FCLK_BUFG_INST : BUFG port map (i => fclk_div_bufio, o => fclk_div);
+
+
 
 generate_proc : for i in 0 to 3 generate
 da_deser : entity data_deserializer 

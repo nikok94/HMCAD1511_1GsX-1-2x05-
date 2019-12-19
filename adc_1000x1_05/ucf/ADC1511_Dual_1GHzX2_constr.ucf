@@ -28,8 +28,11 @@ TIMESPEC TS_clk250 = PERIOD "clk250" 4 ns HIGH 50 %;
 NET "Clock_gen_inst/clk_out_125MHz" TNM_NET = "clk125";
 TIMESPEC TS_clk125 = PERIOD "clk125" 8 ns HIGH 50 %;
 
-NET "adc1_data_receiver/hscs/gclk" TNM_NET = "lck1_div8";
+NET "hscs1/gclk" TNM_NET = "lck1_div8";
 TIMESPEC TS_lck1_div8 = PERIOD "lck1_div8" 8 ns HIGH 50 %;
+
+#NET "adc1_data_receiver/hscs/gclk" TNM_NET = "lck1_div8";
+#TIMESPEC TS_lck1_div8 = PERIOD "lck1_div8" 8 ns HIGH 50 %;
 
 NET "adc1_dx_a_p[0]" LOC = C4;
 NET "adc1_dx_a_p[0]" IOSTANDARD = LVDS_25;
@@ -98,8 +101,11 @@ NET "adc2_lclk_n" LOC = E8;
 NET "adc2_lclk_n" IOSTANDARD = LVDS_25;
 NET "adc2_lclk_n" DIFF_TERM = "TRUE";
 
-NET "adc2_data_receiver/hscs/gclk" TNM_NET = "lck2_div8";
+NET "hscs2/gclk" TNM_NET = "lck2_div8";
 TIMESPEC TS_lck2_div8 = PERIOD "lck2_div8" 8 ns HIGH 50 %;
+
+#NET "adc2_data_receiver/hscs/gclk" TNM_NET = "lck2_div8";
+#TIMESPEC TS_lck2_div8 = PERIOD "lck2_div8" 8 ns HIGH 50 %;
 
 NET "adc2_fclk_p" LOC = E10;
 NET "adc2_fclk_p" IOSTANDARD = LVDS_25;
@@ -219,3 +225,29 @@ NET "spifi_sio3" IOSTANDARD = LVCMOS33;
 NET "pulse_out_p" IOSTANDARD = DIFF_SSTL3_II;
 NET "pulse_out_n" LOC = B16;
 NET "pulse_out_p" LOC = B15;
+
+NET "adc1_fclk_p" CLOCK_DEDICATED_ROUTE = FALSE;
+PIN "adc1_data_receiver/BUFIO2_clk0_inst.I" CLOCK_DEDICATED_ROUTE = FALSE;
+
+NET "adc2_fclk_p" CLOCK_DEDICATED_ROUTE = FALSE;
+PIN "adc2_data_receiver/BUFIO2_clk0_inst.I" CLOCK_DEDICATED_ROUTE = FALSE;
+
+
+
+
+
+NET "fpga_sck" CLOCK_DEDICATED_ROUTE = FALSE;
+
+
+
+
+
+INST "hscs2/BUFIO2_clk1_inst" LOC = BUFIO2_X4Y29;
+INST "hscs2/BUFIO2_clk0_inst" LOC = BUFIO2_X4Y28;
+INST "adc2_data_receiver/BUFIO2_clk0_inst" LOC = BUFIO2_X4Y27;
+
+INST "hscs1/BUFIO2_clk1_inst" LOC = BUFIO2_X2Y29;
+INST "hscs1/BUFIO2_clk0_inst" LOC = BUFIO2_X2Y28;
+INST "adc1_data_receiver/BUFIO2_clk0_inst" LOC = BUFIO2_X2Y27;
+
+
