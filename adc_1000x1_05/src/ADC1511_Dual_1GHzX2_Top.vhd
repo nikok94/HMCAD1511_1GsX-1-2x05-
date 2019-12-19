@@ -255,6 +255,8 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal nvalid_counter_msb_d         : std_logic;
     signal fclk_div1                    : std_logic;
     signal fclk_div2                    : std_logic;
+    signal fclk_div1_s                  : std_logic;
+    signal fclk_div2_s                  : std_logic;
     signal counter1                     : std_logic_vector(7 downto 0):=(others => '0');
     signal counter2                     : std_logic_vector(7 downto 0):=(others => '0');
 
@@ -275,6 +277,19 @@ Clock_gen_inst : entity clock_generator
     );
 
 main_pll_lock <= pll_lock;
+
+
+process(clk_250MHz)
+begin
+  if rising_edge(clk_250MHz) then
+    fclk_div1_s <= fclk_div1;
+    fclk_div2_s <= fclk_div2;
+  end if;
+end process;
+
+
+
+
 
 adc_calib_done_proc :
 process(clk_125MHz, rst)
@@ -303,7 +318,7 @@ hscs1 : entity high_speed_clock_to_serdes
       S                   => 8
       )
     Port map(
-      clkin_ibufg         => lclk2,
+      clkin_ibufg         => lclk1,
       gclk                => adc1_clk_div8,
       serdesclk0          => serdesclk0_1,
       serdesclk1          => serdesclk1_1,
@@ -833,7 +848,7 @@ m_fcb_rd_process :
             when 6 =>
               m_fcb_rddata(15 downto 0) <= frame2_s2 & frame1_s2;
             when 7 =>
-              m_fcb_rddata(15 downto 0) <= counter2 & counter1;
+              m_fcb_rddata(15 downto 0) <= counter2(6 downto 0) & fclk_div2_s & counter1(6 downto 0) & fclk_div1_s;
             when others =>
           end case;
         else 

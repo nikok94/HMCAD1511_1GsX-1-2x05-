@@ -14,10 +14,10 @@ NET "adc1_lclk_n" LOC = A10;
 NET "adc1_lclk_n" IOSTANDARD = LVDS_25;
 NET "adc1_lclk_n" DIFF_TERM = "TRUE";
 
-NET "adc1_fclk_p" LOC = B6;
+NET "adc1_fclk_p" LOC = C9;
 NET "adc1_fclk_p" IOSTANDARD = LVDS_25;
 NET "adc1_fclk_p" DIFF_TERM = "TRUE";
-NET "adc1_fclk_n" LOC = A6;
+NET "adc1_fclk_n" LOC = A9;
 NET "adc1_fclk_n" IOSTANDARD = LVDS_25;
 NET "adc1_fclk_n" DIFF_TERM = "TRUE";
 
@@ -83,10 +83,10 @@ NET "adc1_dx_a_n[3]" LOC = A8;
 NET "adc1_dx_a_n[3]" IOSTANDARD = LVDS_25;
 NET "adc1_dx_a_n[3]" DIFF_TERM = "TRUE";
 
-NET "adc1_dx_b_p[3]" LOC = C9;
+NET "adc1_dx_b_p[3]" LOC = B6;
 NET "adc1_dx_b_p[3]" IOSTANDARD = LVDS_25;
 NET "adc1_dx_b_p[3]" DIFF_TERM = "TRUE";
-NET "adc1_dx_b_n[3]" LOC = A9;
+NET "adc1_dx_b_n[3]" LOC = A6;
 NET "adc1_dx_b_n[3]" IOSTANDARD = LVDS_25;
 NET "adc1_dx_b_n[3]" DIFF_TERM = "TRUE";
 
@@ -226,28 +226,6 @@ NET "pulse_out_p" IOSTANDARD = DIFF_SSTL3_II;
 NET "pulse_out_n" LOC = B16;
 NET "pulse_out_p" LOC = B15;
 
-NET "adc1_fclk_p" CLOCK_DEDICATED_ROUTE = FALSE;
-PIN "adc1_data_receiver/BUFIO2_clk0_inst.I" CLOCK_DEDICATED_ROUTE = FALSE;
-
-NET "adc2_fclk_p" CLOCK_DEDICATED_ROUTE = FALSE;
-PIN "adc2_data_receiver/BUFIO2_clk0_inst.I" CLOCK_DEDICATED_ROUTE = FALSE;
-
-
-
-
-
-NET "fpga_sck" CLOCK_DEDICATED_ROUTE = FALSE;
-
-
-
-
-
-INST "hscs2/BUFIO2_clk1_inst" LOC = BUFIO2_X4Y29;
-INST "hscs2/BUFIO2_clk0_inst" LOC = BUFIO2_X4Y28;
-INST "adc2_data_receiver/BUFIO2_clk0_inst" LOC = BUFIO2_X4Y27;
-
-INST "hscs1/BUFIO2_clk1_inst" LOC = BUFIO2_X2Y29;
-INST "hscs1/BUFIO2_clk0_inst" LOC = BUFIO2_X2Y28;
-INST "adc1_data_receiver/BUFIO2_clk0_inst" LOC = BUFIO2_X2Y27;
-
+PIN "adc1_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
+PIN "adc2_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
 
