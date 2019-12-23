@@ -257,8 +257,12 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal fclk_div2                    : std_logic;
     signal fclk_div1_s                  : std_logic;
     signal fclk_div2_s                  : std_logic;
-    signal counter1                     : std_logic_vector(7 downto 0):=(others => '0');
-    signal counter2                     : std_logic_vector(7 downto 0):=(others => '0');
+    signal clk_250MHz_counter           : std_logic_vector(3 downto 0):=(others => '0');
+    signal clk_250MHz_strob             : std_logic;
+    signal fclk_div1_shift_reg          : std_logic_vector(15 downto 0);
+    signal fclk_div2_shift_reg          : std_logic_vector(15 downto 0);
+    signal frame1_s16                   : std_logic_vector(15 downto 0);
+    signal frame2_s16                   : std_logic_vector(15 downto 0);
 
 begin
 
@@ -278,6 +282,49 @@ Clock_gen_inst : entity clock_generator
 
 main_pll_lock <= pll_lock;
 
+clk_250MHz_counter_proc :
+process(clk_250MHz, rst)
+begin
+  if (rst = '1') then
+    clk_250MHz_counter <= (others => '0');
+    clk_250MHz_strob <= '0';
+  elsif rising_edge(clk_250MHz) then
+    clk_250MHz_counter <= clk_250MHz_counter + 1;
+    if clk_250MHz_counter = "1111" then
+      clk_250MHz_strob <= '1';
+    else
+      clk_250MHz_strob <= '0';
+    end if;
+  end if;
+end process;
+
+process(clk_250MHz, rst)
+begin
+  if (rst = '1') then
+    frame1_s16 <= (others => '0');
+    frame2_s16 <= (others => '0');
+  elsif rising_edge(clk_250MHz) then
+    if (clk_250MHz_strob = '1') then
+      frame1_s16 <= fclk_div1_shift_reg;
+      frame2_s16 <= fclk_div2_shift_reg;
+    end if;
+  end if;
+end process;
+
+fclk_div1_shift_reg_proc :
+process(clk_250MHz, rst)
+begin
+  if (rst = '1') then
+    fclk_div1_shift_reg <= (others => '0');
+    fclk_div2_shift_reg <= (others => '0');
+  elsif rising_edge(clk_250MHz) then
+    fclk_div1_shift_reg(0) <= fclk_div1;
+    fclk_div1_shift_reg(fclk_div1_shift_reg'length - 1 downto 1) <= fclk_div1_shift_reg(fclk_div1_shift_reg'length - 2 downto 0);
+    fclk_div2_shift_reg(0) <= fclk_div2;
+    fclk_div2_shift_reg(fclk_div2_shift_reg'length - 1 downto 1) <= fclk_div2_shift_reg(fclk_div2_shift_reg'length - 2 downto 0);
+  end if;
+end process;
+
 
 process(clk_250MHz)
 begin
@@ -286,9 +333,6 @@ begin
     fclk_div2_s <= fclk_div2;
   end if;
 end process;
-
-
-
 
 
 adc_calib_done_proc :
@@ -325,12 +369,6 @@ hscs1 : entity high_speed_clock_to_serdes
       serdesstrobe        => serdesstrobe_1
     );
 
-
---adc1_clk_div8    <= gclk;
---serdesclk0_1     <= serdesclk0;
---serdesclk1_1     <= serdesclk1;
---serdesstrobe_1   <= serdesstrobe;
-
 IBUFGDS2_inst : IBUFGDS
    generic map (
       IBUF_LOW_PWR => TRUE, -- Low power (TRUE) vs. performance (FALSE) setting for referenced I/O standards
@@ -353,12 +391,6 @@ hscs2 : entity high_speed_clock_to_serdes
       serdesclk1          => serdesclk1_2,
       serdesstrobe        => serdesstrobe_2
     );
-
-
---adc2_clk_div8    <= adc1_clk_div8;
---serdesclk0_2     <= serdesclk0_1;
---serdesclk1_2     <= serdesclk1_1;
---serdesstrobe_2   <= serdesstrobe_1;
 
 adc1_data_receiver : entity HMCAD1511_v3_00
     Port map(
@@ -384,14 +416,6 @@ adc1_data_receiver : entity HMCAD1511_v3_00
       fclk_div              => fclk_div1
     );
 
-counter1_proc : process(fclk_div1)
-begin
-  if rising_edge(fclk_div1) then
-    counter1 <= counter1 + 1;
-  end if;
-end process;
-
-
 adc2_data_receiver : entity HMCAD1511_v3_00
     Port map(
       FCLKp                 => adc2_fclk_p,
@@ -414,13 +438,6 @@ adc2_data_receiver : entity HMCAD1511_v3_00
       frame                 => frame2,
       fclk_div              => fclk_div2
     );
-
-counter2_proc : process(fclk_div2)
-begin
-  if rising_edge(fclk_div2) then
-    counter2 <= counter2 + 1;
-  end if;
-end process;
 
 nvalid_counter_proc:
 process(clk_125MHz, rst)
@@ -848,7 +865,9 @@ m_fcb_rd_process :
             when 6 =>
               m_fcb_rddata(15 downto 0) <= frame2_s2 & frame1_s2;
             when 7 =>
-              m_fcb_rddata(15 downto 0) <= counter2(6 downto 0) & fclk_div2_s & counter1(6 downto 0) & fclk_div1_s;
+              m_fcb_rddata(15 downto 0) <= frame1_s16;
+            when 8 =>
+              m_fcb_rddata(15 downto 0) <= frame2_s16;
             when others =>
           end case;
         else 

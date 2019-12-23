@@ -275,15 +275,13 @@ frame_deser : entity data_deserializer
       bitslip           => bitslip,
       data_obuf         => frame_obuf
     );
-    
-
 
 BUFIO2_clk0_inst : BUFIO2
    generic map (
       DIVIDE => 8,           -- DIVCLK divider (1,3-8)
       DIVIDE_BYPASS => FALSE, -- Bypass the divider circuitry (TRUE/FALSE)
       I_INVERT => FALSE,     -- Invert clock (TRUE/FALSE)
-      USE_DOUBLER => TRUE   -- Use doubler circuitry (TRUE/FALSE)
+      USE_DOUBLER => false   -- Use doubler circuitry (TRUE/FALSE)
    )
    port map (
       DIVCLK => fclk_div_bufio,             -- 1-bit output: Divided clock output
@@ -292,8 +290,9 @@ BUFIO2_clk0_inst : BUFIO2
       I => frame_obuf                        -- 1-bit input: Clock input (connect to IBUFG)
    );
 
+fclk_div <= fclk_div_bufio;
 
-FCLK_BUFG_INST : BUFG port map (i => fclk_div_bufio, o => fclk_div);
+--FCLK_BUFG_INST : BUFG port map (i => fclk_div_bufio, o => fclk_div);
 
 
 

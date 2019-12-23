@@ -226,6 +226,6 @@ NET "pulse_out_p" IOSTANDARD = DIFF_SSTL3_II;
 NET "pulse_out_n" LOC = B16;
 NET "pulse_out_p" LOC = B15;
 
-PIN "adc1_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
-PIN "adc2_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
+#PIN "adc1_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
+#PIN "adc2_data_receiver/FCLK_BUFG_INST.O" CLOCK_DEDICATED_ROUTE = FALSE;
 
