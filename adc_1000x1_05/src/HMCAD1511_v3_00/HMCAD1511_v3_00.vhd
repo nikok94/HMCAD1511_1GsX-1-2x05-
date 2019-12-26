@@ -25,6 +25,7 @@ use IEEE.STD_LOGIC_unsigned.ALL;
 
 library work;
 use work.data_deserializer;
+use work.frame_deserializer;
 use work.high_speed_clock_to_serdes;
 
 
@@ -65,9 +66,9 @@ entity HMCAD1511_v3_00 is
       bsleep_counter        : out std_logic_vector(3 downto 0);
       
       frame                 : out std_logic_vector(7 downto 0);
-      fclk_div              : out std_logic--;
+--      fclk_div              : out std_logic;
 --      lclk_obuf             : out std_logic;
---      fclk_obuf             : out std_logic
+      fclk_obuf             : out std_logic
     );
 end HMCAD1511_v3_00;
 
@@ -276,25 +277,25 @@ frame_deser : entity data_deserializer
       data_obuf         => frame_obuf
     );
 
-BUFIO2_clk0_inst : BUFIO2
-   generic map (
-      DIVIDE => 8,           -- DIVCLK divider (1,3-8)
-      DIVIDE_BYPASS => FALSE, -- Bypass the divider circuitry (TRUE/FALSE)
-      I_INVERT => FALSE,     -- Invert clock (TRUE/FALSE)
-      USE_DOUBLER => false   -- Use doubler circuitry (TRUE/FALSE)
-   )
-   port map (
-      DIVCLK => fclk_div_bufio,             -- 1-bit output: Divided clock output
-      IOCLK => open,               -- 1-bit output: I/O output clock
-      SERDESSTROBE => open, -- 1-bit output: Output SERDES strobe (connect to ISERDES2/OSERDES2)
-      I => frame_obuf                        -- 1-bit input: Clock input (connect to IBUFG)
-   );
+--BUFIO2_clk0_inst : BUFIO2
+--   generic map (
+--      DIVIDE => 8,           -- DIVCLK divider (1,3-8)
+--      DIVIDE_BYPASS => FALSE, -- Bypass the divider circuitry (TRUE/FALSE)
+--      I_INVERT => FALSE,     -- Invert clock (TRUE/FALSE)
+--      USE_DOUBLER => false   -- Use doubler circuitry (TRUE/FALSE)
+--   )
+--   port map (
+--      DIVCLK => fclk_div_bufio,             -- 1-bit output: Divided clock output
+--      IOCLK => open,               -- 1-bit output: I/O output clock
+--      SERDESSTROBE => open, -- 1-bit output: Output SERDES strobe (connect to ISERDES2/OSERDES2)
+--      I => frame_obuf                        -- 1-bit input: Clock input (connect to IBUFG)
+--   );
+--
+----fclk_div <= fclk_div_bufio;
+--
+--FCLK_BUFG_INST : BUFG port map (i => frame_obuf, o => fclk_obuf);
 
-fclk_div <= fclk_div_bufio;
-
---FCLK_BUFG_INST : BUFG port map (i => fclk_div_bufio, o => fclk_div);
-
-
+fclk_obuf <= frame_obuf;
 
 generate_proc : for i in 0 to 3 generate
 da_deser : entity data_deserializer 

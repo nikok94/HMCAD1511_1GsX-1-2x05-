@@ -14,6 +14,10 @@
 !/**/src/fifo_generator_v9_3_0/fifo_64_8.xci
 /**/src/fifo_generator_v9_3_2/*
 !/**/src/fifo_generator_v9_3_2/async_fifo_64.xci
+/**/src/fifo_generator_v9_3_3/*
+!/**/src/fifo_generator_v9_3_3/async_fifo_8.xci
+
+
 
 /**/tcl/*
 !/**/tcl/build_project.tcl

@@ -27,9 +27,11 @@ library work;
 use work.HMCAD1511_v3_00;
 --use work.HMCAD1511_x2_v1_00;
 use work.clock_generator;
+use work.fclk_clock_gen;
 use work.spi_adc_250x4_master;
 --use work.fifo_sream;
 use work.async_fifo_64;
+--use work.async_fifo_8;
 use work.trigger_capture;
 --use work.data_capture_module;
 use work.data_capture;
@@ -96,6 +98,12 @@ entity ADC1511_Dual_1GHzX2_Top is
         --fclk_div1               : out std_logic;
         --fclk_div2               : out std_logic;
         
+        t6                      : out std_logic;
+        t7                      : out std_logic;
+        t8                      : out std_logic;
+        
+        p6_6_xor_out            : out std_logic;
+        
         fpga_sck                : in std_logic;
         fpga_cs                 : in std_logic;
         fpga_miso               : out std_logic;
@@ -160,6 +168,7 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal vio_calib_vector_d           : std_logic_vector(3 downto 0);
     signal clk_125MHz                   : std_logic;
     signal clk_250MHz                   : std_logic;
+    signal clk_500MHz                   : std_logic;
     signal rst                          : std_logic;
     signal ext_trig                     : std_logic:= '0';
     signal adc1_trigger_start           : std_logic;
@@ -263,6 +272,24 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal fclk_div2_shift_reg          : std_logic_vector(15 downto 0);
     signal frame1_s16                   : std_logic_vector(15 downto 0);
     signal frame2_s16                   : std_logic_vector(15 downto 0);
+    signal fck1_xor_fck2                : std_logic;
+    signal calib_done                   : std_logic;
+    signal ff1_reg, ff2_reg             : std_logic_vector(3 downto 0);
+    signal lck_counter                  : std_logic_vector(1 downto 0);
+    signal ff1, ff2                     : std_logic_vector(3 downto 0);
+    signal ff1_ff2_vec                  : std_logic_vector(7 downto 0):= (others => '0');
+    signal ff1_ff2_vec1                 : std_logic_vector(7 downto 0):= (others => '0');
+    signal ff_val                       : std_logic;
+    signal async_fifo_8_wr_en           : std_logic;
+    signal async_fifo_8_rd_en           : std_logic;
+    signal async_fifo_8_full            : std_logic;
+    signal async_fifo_8_valid           : std_logic;
+    signal async_fifo_8_dout            : std_logic_vector(7 downto 0);
+    signal async_fifo_8_dout_d          : std_logic_vector(7 downto 0);
+    type state_machine                  is (idle, all_fifo_val_st, counter_st, ready_st);
+    signal next_state, state            : state_machine;
+    signal tick_counter                 : std_logic_vector(12 downto 0);
+    signal lck2_pll                     : std_logic;
 
 begin
 
@@ -276,76 +303,144 @@ Clock_gen_inst : entity clock_generator
       rst_in            => sys_rst,
       pll_lock          => pll_lock,
       clk_out_125MHz    => clk_125MHz,
-      clk_out_250MHz    => clk_250MHz, 
+      clk_out_250MHz    => clk_250MHz,
+      clk_out_500MHz    => clk_500MHz,
       rst_out           => infrst_rst_out
+    );
+    
+fclk_clock_gen_inst : entity fclk_clock_gen
+    Port map( 
+      fclk          => fclk2,
+      rst           => rst,
+      pll_lock      => open,
+      clk_out       => lck2_pll
     );
 
 main_pll_lock <= pll_lock;
-
-clk_250MHz_counter_proc :
-process(clk_250MHz, rst)
-begin
-  if (rst = '1') then
-    clk_250MHz_counter <= (others => '0');
-    clk_250MHz_strob <= '0';
-  elsif rising_edge(clk_250MHz) then
-    clk_250MHz_counter <= clk_250MHz_counter + 1;
-    if clk_250MHz_counter = "1111" then
-      clk_250MHz_strob <= '1';
-    else
-      clk_250MHz_strob <= '0';
-    end if;
-  end if;
-end process;
-
-process(clk_250MHz, rst)
-begin
-  if (rst = '1') then
-    frame1_s16 <= (others => '0');
-    frame2_s16 <= (others => '0');
-  elsif rising_edge(clk_250MHz) then
-    if (clk_250MHz_strob = '1') then
-      frame1_s16 <= fclk_div1_shift_reg;
-      frame2_s16 <= fclk_div2_shift_reg;
-    end if;
-  end if;
-end process;
-
-fclk_div1_shift_reg_proc :
-process(clk_250MHz, rst)
-begin
-  if (rst = '1') then
-    fclk_div1_shift_reg <= (others => '0');
-    fclk_div2_shift_reg <= (others => '0');
-  elsif rising_edge(clk_250MHz) then
-    fclk_div1_shift_reg(0) <= fclk_div1;
-    fclk_div1_shift_reg(fclk_div1_shift_reg'length - 1 downto 1) <= fclk_div1_shift_reg(fclk_div1_shift_reg'length - 2 downto 0);
-    fclk_div2_shift_reg(0) <= fclk_div2;
-    fclk_div2_shift_reg(fclk_div2_shift_reg'length - 1 downto 1) <= fclk_div2_shift_reg(fclk_div2_shift_reg'length - 2 downto 0);
-  end if;
-end process;
-
-
-process(clk_250MHz)
-begin
-  if rising_edge(clk_250MHz) then
-    fclk_div1_s <= fclk_div1;
-    fclk_div2_s <= fclk_div2;
-  end if;
-end process;
-
 
 adc_calib_done_proc :
 process(clk_125MHz, rst)
 begin
   if (rst = '1') then
-    adc_calib_done <= '0';
+    calib_done <= '0';
   elsif rising_edge(clk_125MHz) then
     if all_fifo_valid = '1' then
-      adc_calib_done <= '1';
+      calib_done <= '1';
     end if;
   end if;
 end process;
+
+adc_calib_done <= calib_done;
+
+frames_reg_process:
+process(lck2_pll, rst)
+begin
+  if (rst = '1') then
+    ff1_reg <= (others => '0');
+    ff2_reg <= (others => '0');
+    lck_counter <= (others => '0');
+    ff_val <= '0';
+  elsif rising_edge(lck2_pll) then
+    ff1_reg(0) <= fclk1;
+    ff1_reg(3 downto 1) <= ff1_reg(2 downto 0);
+    ff2_reg(0) <= fclk2;
+    ff2_reg(3 downto 1) <= ff2_reg(2 downto 0);
+    if (lck_counter = "11") then
+      ff1 <= ff1_reg;
+      ff2 <= ff2_reg;
+      lck_counter <= lck_counter + 1;
+      ff_val <= '1';
+    else
+      lck_counter <= lck_counter + 1;
+      ff_val <= '0';
+    end if;
+  end if;
+end process;
+
+--lck2_bufg <= clk_125MHz;
+
+--async_fifo_8_inst : ENTITY async_fifo_8
+--  PORT MAP(
+--    rst         => rst,
+--    wr_clk      => fclk2,
+--    rd_clk      => clk_125MHz,
+--    din         => ff2 & ff1,
+--    wr_en       => async_fifo_8_wr_en,
+--    rd_en       => async_fifo_8_rd_en,
+--    dout        => async_fifo_8_dout,
+--    full        => async_fifo_8_full,
+--    empty       => open,
+--    valid       => async_fifo_8_valid
+--  );
+--
+--async_fifo_8_rd_en <= async_fifo_8_valid;
+--async_fifo_8_wr_en <= (not async_fifo_8_full) and ff_val;
+
+state_sync_proc :
+process(lck2_pll, rst)
+begin
+  if (rst = '1') then
+    state <= idle;
+  elsif rising_edge(lck2_pll) then
+    state <= next_state;
+  end if;
+end process;
+
+next_state_process :
+process(state, all_fifo_valid, tick_counter(tick_counter'length - 1))
+begin
+  next_state <= state;
+  p6_6_xor_out <= '0';
+    case (state) is
+      when idle =>
+        next_state <= all_fifo_val_st;
+      when all_fifo_val_st => 
+        if (all_fifo_valid = '1') then
+          next_state <= counter_st;
+        end if;
+      when counter_st =>
+        if tick_counter(tick_counter'length - 1) = '1' then
+          next_state <= ready_st;
+        end if;
+      when ready_st =>
+        p6_6_xor_out <= '1';
+      when others =>
+        next_state <= idle;
+    end case;
+end process;
+
+async_fifo_8_dout <= ff2 & ff1;
+async_fifo_8_valid <= ff_val;
+
+async_fifo_8_dout_d_proc :
+  process(lck2_pll)
+  begin
+    if rising_edge(lck2_pll) then
+      if (async_fifo_8_valid = '1') then
+        async_fifo_8_dout_d <= async_fifo_8_dout;
+      end if;
+    end if;
+  end process;
+
+tick_counter_proc :
+  process(lck2_pll, state)
+  begin
+    if (state /= counter_st) then
+      tick_counter <= (others => '0');
+    elsif rising_edge(lck2_pll) then
+      if (async_fifo_8_valid = '1') then
+        if (async_fifo_8_dout_d = async_fifo_8_dout) then
+          tick_counter <= tick_counter + 1;
+          ff1_ff2_vec <= async_fifo_8_dout;
+        else
+          tick_counter <= (others => '0');
+        end if;
+      end if;
+    end if;
+  end process;
+  
+ff1_ff2_vec1 <= ff1_ff2_vec;
+
 
 IBUFGDS1_inst : IBUFGDS
    generic map (
@@ -362,7 +457,7 @@ hscs1 : entity high_speed_clock_to_serdes
       S                   => 8
       )
     Port map(
-      clkin_ibufg         => lclk1,
+      clkin_ibufg         => lclk2,
       gclk                => adc1_clk_div8,
       serdesclk0          => serdesclk0_1,
       serdesclk1          => serdesclk1_1,
@@ -378,7 +473,6 @@ IBUFGDS2_inst : IBUFGDS
       I => adc2_lclk_p,         -- Diff_p clock buffer input
       IB => adc2_lclk_n         -- Diff_n clock buffer input
    );
-
 
 hscs2 : entity high_speed_clock_to_serdes
     Generic map (
@@ -413,7 +507,7 @@ adc1_data_receiver : entity HMCAD1511_v3_00
       serdesstrobe          => serdesstrobe_1,
 
       frame                 => frame1,
-      fclk_div              => fclk_div1
+      fclk_obuf             => fclk1
     );
 
 adc2_data_receiver : entity HMCAD1511_v3_00
@@ -436,11 +530,16 @@ adc2_data_receiver : entity HMCAD1511_v3_00
       serdesstrobe          => serdesstrobe_2,
 
       frame                 => frame2,
-      fclk_div              => fclk_div2
+      fclk_obuf             => fclk2
     );
 
+t6 <= fclk1;
+t7 <= fclk2;
+fck1_xor_fck2 <= (fclk1 xor fclk2);
+t8 <= fck1_xor_fck2;
+
 nvalid_counter_proc:
-process(clk_125MHz, rst)
+process(clk_125MHz, rst, all_fifo_valid)
 begin
     if (rst = '1') then
       nvalid_counter <= (others => '0');
@@ -865,9 +964,7 @@ m_fcb_rd_process :
             when 6 =>
               m_fcb_rddata(15 downto 0) <= frame2_s2 & frame1_s2;
             when 7 =>
-              m_fcb_rddata(15 downto 0) <= frame1_s16;
-            when 8 =>
-              m_fcb_rddata(15 downto 0) <= frame2_s16;
+              m_fcb_rddata(7 downto 0) <= ff1_ff2_vec1;
             when others =>
           end case;
         else 
@@ -876,44 +973,6 @@ m_fcb_rd_process :
       end if;
     end process;
 
-process(clk_125MHz) 
-begin
-  if rising_edge(clk_125MHz) then
-    frame1_s1 <= frame1;
-    frame2_s1 <= frame2;
-    frame1_s2 <= frame1_s1;
-    frame2_s2 <= frame2_s1;
-  end if;
-end process;
 
-
---ila1_inst : ENTITY ila
---  port map(
---    CONTROL => control_0,
---    CLK     => clk_125MHz,
---    DATA    => adc2_fifo_m_rd_data_cntr & adc1_fifo_m_rd_data_cntr & adc2_sync_data & adc1_sync_data & adc2_sync_valid & adc1_sync_valid & trigger_start,
---    TRIG0   => adc2_sync_valid & adc1_sync_valid & trigger_start 
---    );
---
---ila1_data_adc1 : ENTITY ila_data_in
---  port map(
---    CONTROL => control_1,
---    CLK     => adc1_clk_div8,
---    TRIG0   => adc1_data & adc1_valid & trigger_start 
---    );
---
---ila1_data_adc2 : ENTITY ila_data_in
---  port map(
---    CONTROL => control_2,
---    CLK     => adc1_clk_div8,
---    TRIG0   => adc2_data & adc2_valid & trigger_start 
---    );
---    
---icon_inst : entity icon
---  port map (
---    CONTROL0    => control_0,
---    CONTROL1    => control_1,
---    CONTROL2    => control_2
---    );
 
 end Behavioral;
