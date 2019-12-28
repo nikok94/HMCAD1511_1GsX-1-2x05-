@@ -301,6 +301,7 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal lck2_pll                     : std_logic;
     signal lck2_pll_180                 : std_logic;
     signal rst_lck2_pll_s               : std_logic;
+    signal fclk_pll_lock                : std_logic;
 
 begin
 
@@ -323,7 +324,7 @@ fclk_clock_gen_inst : entity fclk_clock_gen
     Port map( 
       fclk          => fclk2,
       rst           => rst,
-      pll_lock      => open,
+      pll_lock      => fclk_pll_lock,
       clk_out       => lck2_pll,
       clk_out_180   => lck2_pll_180
     );
@@ -345,17 +346,19 @@ end process;
 adc_calib_done <= calib_done;
 
 rst_lck2_pll_s_proc :
-process(lck2_pll)
+process(lck2_pll_180, rst)
 begin
-  if falling_edge(lck2_pll) then
-    rst_lck2_pll_s <= rst;
+  if rst = '1' then
+    rst_lck2_pll_s <= '1';
+  elsif rising_edge(lck2_pll_180) then
+    rst_lck2_pll_s <= '0';
   end if;
 end process;
 
 frames_reg_process:
-process(lck2_pll, rst, rst_lck2_pll_s)
+process(lck2_pll, rst_lck2_pll_s)
 begin
-  if (rst = '1') or (rst_lck2_pll_s = '1') then
+  if (rst_lck2_pll_s = '1') then
     ff1_reg <= (others => '0');
     ff2_reg <= (others => '0');
     lck_counter <= (others => '0');
@@ -378,9 +381,9 @@ begin
 end process;
 
 frames_f_reg_process:
-process(lck2_pll_180, rst, rst_lck2_pll_s)
+process(lck2_pll_180, rst_lck2_pll_s)
 begin
-  if (rst = '1') or (rst_lck2_pll_s = '1') then
+  if (rst_lck2_pll_s = '1') then
     ff1_reg_f <= (others => '0');
     ff2_reg_f <= (others => '0');
     lck_counter_f <= (others => '0');
@@ -1022,7 +1025,7 @@ m_fcb_rd_process :
             when 5 => 
               m_fcb_rddata <= low_adc_buff_len;
             when 6 =>
-              m_fcb_rddata(15 downto 0) <= frame2_s2 & frame1_s2;
+              m_fcb_rddata(0) <= fclk_pll_lock;
             when 7 =>
               m_fcb_rddata <= ff1_ff2_vec1;
             when others =>
