@@ -25,7 +25,7 @@ use IEEE.STD_LOGIC_unsigned.ALL;
 
 library work;
 use work.data_deserializer;
-use work.frame_deserializer;
+--use work.frame_deserializer;
 use work.high_speed_clock_to_serdes;
 
 

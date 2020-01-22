@@ -190,8 +190,8 @@ NET "adc_calib_done" IOSTANDARD = LVCMOS33;
 NET "main_pll_lock" LOC = L12;
 NET "main_pll_lock" IOSTANDARD = LVCMOS33;
 
-NET "p6_6_xor_out" LOC = K11;
-NET "p6_6_xor_out" IOSTANDARD = LVCMOS33;
+#NET "p6_6_xor_out" LOC = K11;
+#NET "p6_6_xor_out" IOSTANDARD = LVCMOS33;
 
 
 
@@ -231,9 +231,9 @@ NET "pulse_out_p" IOSTANDARD = DIFF_SSTL3_II;
 NET "pulse_out_n" LOC = B16;
 NET "pulse_out_p" LOC = B15;
 
-NET "t6" LOC = T6;
-NET "t7" LOC = T7;
-NET "t8" LOC = T8;
+#NET "t6" LOC = T6;
+#NET "t7" LOC = T7;
+#NET "t8" LOC = T8;
 
 #PIN "lclk2_BUFG.O" CLOCK_DEDICATED_ROUTE = FALSE;
 

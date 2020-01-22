@@ -36,8 +36,7 @@ entity fclk_clock_gen is
       fclk          : in std_logic;
       rst           : in std_logic;
       pll_lock      : out std_logic;
-      clk_out       : out std_logic;
-      clk_out_180   : out std_logic
+      clk_out       : out std_logic
     );
 end fclk_clock_gen;
 
@@ -76,8 +75,8 @@ PLL_BASE_inst : PLL_BASE
       CLKOUT4_DUTY_CYCLE => 0.5,
       CLKOUT5_DUTY_CYCLE => 0.5,
       -- CLKOUT0_PHASE - CLKOUT5_PHASE: Output phase relationship for CLKOUT# clock output (-360.0-360.0).
-      CLKOUT0_PHASE => 0.0,
-      CLKOUT1_PHASE => 180.0,
+      CLKOUT0_PHASE => 180.0,
+      CLKOUT1_PHASE => 0.0,
       CLKOUT2_PHASE => 0.0,
       CLKOUT3_PHASE => 0.0,
       CLKOUT4_PHASE => 0.0,
@@ -104,7 +103,6 @@ PLL_BASE_inst : PLL_BASE
    );
 
 clk_out <= pll_clkout_0;
-clk_out_180 <= pll_clkout_1;
 
 clk_in <= fclk;
 

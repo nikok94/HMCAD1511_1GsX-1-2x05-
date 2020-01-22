@@ -27,13 +27,13 @@ library work;
 use work.HMCAD1511_v3_00;
 --use work.HMCAD1511_x2_v1_00;
 use work.clock_generator;
-use work.fclk_clock_gen;
+--use work.fclk_clock_gen;
 use work.spi_adc_250x4_master;
 --use work.fifo_sream;
 use work.async_fifo_64;
-use work.async_fifo_8;
+--use work.async_fifo_8;
 use work.trigger_capture;
---use work.data_capture_module;
+use work.data_shift_module;
 use work.data_capture;
 use work.QuadSPI_adc_250x4_module;
 use work.high_speed_clock_to_serdes;
@@ -98,11 +98,11 @@ entity ADC1511_Dual_1GHzX2_Top is
         --fclk_div1               : out std_logic;
         --fclk_div2               : out std_logic;
         
-        t6                      : out std_logic;
-        t7                      : out std_logic;
-        t8                      : out std_logic;
+--        t6                      : out std_logic;
+--        t7                      : out std_logic;
+--        t8                      : out std_logic;
         
-        p6_6_xor_out            : out std_logic;
+--        p6_6_xor_out            : out std_logic;
         
         fpga_sck                : in std_logic;
         fpga_cs                 : in std_logic;
@@ -141,7 +141,7 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal m_fcb_rdreq          : std_logic;
     signal m_fcb_rdack          : std_logic;
     
-    signal trig_set_up_reg              : std_logic_vector(15 downto 0):= x"7f00";
+
     signal trig_window_width_reg        : std_logic_vector(15 downto 0):= x"0200";
     signal trig_position_reg            : std_logic_vector(15 downto 0):= x"0800";
     signal control_reg                  : std_logic_vector(15 downto 0):= (others => '0');
@@ -172,14 +172,9 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal rst                          : std_logic;
     signal ext_trig                     : std_logic:= '0';
     signal adc1_trigger_start           : std_logic;
-    signal adc2_trigger_start           : std_logic;
-    signal adc3_trigger_start           : std_logic;
-    signal adc1_trigger_set_up          : std_logic;
-    signal adc1_trigger_set_vec         : std_logic_vector(1 downto 0);
-    signal adc2_trigger_set_up          : std_logic;
-    signal adc2_trigger_set_vec         : std_logic_vector(1 downto 0);
-    signal adc3_trigger_set_up          : std_logic;
-    signal adc3_trigger_set_vec         : std_logic_vector(1 downto 0);
+    signal adc2_0_trigger_start         : std_logic;
+    signal adc2_1_trigger_start         : std_logic;
+    signal adcs_trigger_set_up          : std_logic;
     signal adc1_capture_module_rst      : std_logic;
     signal adc2_capture_module_rst      : std_logic;
     signal trigger_start                : std_logic;
@@ -250,6 +245,10 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal frame1_s2                    : std_logic_vector(7 downto 0);
     signal frame2_s2                    : std_logic_vector(7 downto 0);
     
+    signal adc1_shift_data              : std_logic_vector(63 downto 0);
+    signal adc2_shift_data              : std_logic_vector(63 downto 0);
+    signal shift_data_valid             : std_logic;
+    
     signal serdesclk0_1                 : std_logic;
     signal serdesclk1_1                 : std_logic;
     signal serdesstrobe_1               : std_logic;
@@ -292,9 +291,9 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal async_fifo_8_rd_en           : std_logic;
     signal async_fifo_8_full            : std_logic;
     signal async_fifo_8_valid           : std_logic;
-    signal async_fifo_8_din             : std_logic_vector(15 downto 0);
-    signal async_fifo_8_dout            : std_logic_vector(15 downto 0);
-    signal async_fifo_8_dout_d          : std_logic_vector(15 downto 0);
+    signal async_fifo_8_din             : std_logic_vector(7 downto 0);
+    signal async_fifo_8_dout            : std_logic_vector(7 downto 0);
+    signal async_fifo_8_dout_d          : std_logic_vector(7 downto 0);
     type state_machine                  is (idle, all_fifo_val_st, counter_st, ready_st);
     signal next_state, state            : state_machine;
     signal tick_counter                 : std_logic_vector(12 downto 0);
@@ -302,10 +301,36 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal lck2_pll_180                 : std_logic;
     signal rst_lck2_pll_s               : std_logic;
     signal fclk_pll_lock                : std_logic;
-
+    signal adc1_up                      : std_logic_vector(7 downto 0);
+    signal adc1_down                    : std_logic_vector(7 downto 0);
+    signal adc2_up                      : std_logic_vector(7 downto 0);
+    signal adc2_down                    : std_logic_vector(7 downto 0);
+    signal captupe_mode                 : std_logic_vector(1 downto 0);
+    signal adcs_is_valid                : std_logic_vector(1 downto 0);
+    signal trigger_level                : std_logic_vector(7 downto 0);
+    signal adc1_trig_vec                : std_logic_vector(7 downto 0);
+    signal adc2_0_trig_vec              : std_logic_vector(3 downto 0);
+    signal adc2_1_trig_vec              : std_logic_vector(3 downto 0);
+    
+    signal shift_module_capture_mode    : std_logic_vector(1 downto 0);
+    signal shift_module_capture_level   : std_logic_vector(7 downto 0);
+    signal shift_module_trigger_set_up  : std_logic;
+    
+    signal mode                         : std_logic_vector(1 downto 0);
+    signal front_condition              : std_logic_vector(1 downto 0);
+    signal level                        : std_logic_vector(7 downto 0);
+    signal set_up                       : std_logic;
+    signal shift_data_done              : std_logic;
+    signal shift_data_pulse             : std_logic;
+    signal calib_level                  : std_logic_vector(7 downto 0):= x"96";
+    signal front_condi                  : std_logic_vector(1 downto 0); 
+    signal data_capture_rst             : std_logic;
+    
+    
+    
 begin
 
-rst <= infrst_rst_out or control_reg(1) or adc_receiver_rst;
+rst <= infrst_rst_out or control_reg(0) or adc_receiver_rst;
 
 sys_rst <= (not xc_sys_rstn);
 
@@ -320,189 +345,143 @@ Clock_gen_inst : entity clock_generator
       rst_out           => infrst_rst_out
     );
     
-fclk_clock_gen_inst : entity fclk_clock_gen
-    Port map( 
-      fclk          => fclk2,
-      rst           => rst,
-      pll_lock      => fclk_pll_lock,
-      clk_out       => lck2_pll,
-      clk_out_180   => lck2_pll_180
-    );
+--fclk_clock_gen_inst : entity fclk_clock_gen
+--    Port map( 
+--      fclk          => fclk2,
+--      rst           => rst,
+--      pll_lock      => fclk_pll_lock,
+--      clk_out       => lck2_pll
+--    );
 
 main_pll_lock <= pll_lock;
 
-adc_calib_done_proc :
-process(clk_125MHz, rst)
-begin
-  if (rst = '1') then
-    calib_done <= '0';
-  elsif rising_edge(clk_125MHz) then
-    if all_fifo_valid = '1' then
-      calib_done <= '1';
-    end if;
-  end if;
-end process;
+--adc_calib_done_proc :
+--process(clk_125MHz, rst)
+--begin
+--  if (rst = '1') then
+--    calib_done <= '0';
+--  elsif rising_edge(clk_125MHz) then
+--    if all_fifo_valid = '1' then
+--      calib_done <= '1';
+--    end if;
+--  end if;
+--end process;
+calib_done <= shift_data_done;
 
 adc_calib_done <= calib_done;
 
-rst_lck2_pll_s_proc :
-process(lck2_pll_180, rst)
-begin
-  if rst = '1' then
-    rst_lck2_pll_s <= '1';
-  elsif rising_edge(lck2_pll_180) then
-    rst_lck2_pll_s <= '0';
-  end if;
-end process;
+--frames_reg_process:
+--process(lck2_pll, rst)
+--begin
+--  if (rst = '1') then
+--    ff1_reg <= (others => '0');
+--    ff2_reg <= (others => '0');
+--    lck_counter <= (others => '0');
+--    ff_val <= '0';
+--  elsif rising_edge(lck2_pll) then
+--    ff1_reg(0) <= fclk1;
+--    ff1_reg(3 downto 1) <= ff1_reg(2 downto 0);
+--    ff2_reg(0) <= fclk2;
+--    ff2_reg(3 downto 1) <= ff2_reg(2 downto 0);
+--    if (lck_counter = "11") then
+--      ff1 <= ff1_reg;
+--      ff2 <= ff2_reg;
+--      lck_counter <= (others => '0');
+--      ff_val <= '1';
+--    else
+--      lck_counter <= lck_counter + 1;
+--      ff_val <= '0';
+--    end if;
+--  end if;
+--end process;
 
-frames_reg_process:
-process(lck2_pll, rst_lck2_pll_s)
-begin
-  if (rst_lck2_pll_s = '1') then
-    ff1_reg <= (others => '0');
-    ff2_reg <= (others => '0');
-    lck_counter <= (others => '0');
-    ff_val <= '0';
-  elsif rising_edge(lck2_pll) then
-    ff1_reg(0) <= fclk1;
-    ff1_reg(3 downto 1) <= ff1_reg(2 downto 0);
-    ff2_reg(0) <= fclk2;
-    ff2_reg(3 downto 1) <= ff2_reg(2 downto 0);
-    if (lck_counter = "11") then
-      ff1 <= ff1_reg;
-      ff2 <= ff2_reg;
-      lck_counter <= (others => '0');
-      ff_val <= '1';
-    else
-      lck_counter <= lck_counter + 1;
-      ff_val <= '0';
-    end if;
-  end if;
-end process;
-
-frames_f_reg_process:
-process(lck2_pll_180, rst_lck2_pll_s)
-begin
-  if (rst_lck2_pll_s = '1') then
-    ff1_reg_f <= (others => '0');
-    ff2_reg_f <= (others => '0');
-    lck_counter_f <= (others => '0');
-    ff_val_f <= '0';
-  elsif rising_edge(lck2_pll_180) then
-    ff1_reg_f(0) <= fclk1;
-    ff1_reg_f(3 downto 1) <= ff1_reg_f(2 downto 0);
-    ff2_reg_f(0) <= fclk2;
-    ff2_reg_f(3 downto 1) <= ff2_reg_f(2 downto 0);
-    if (lck_counter_f = "11") then
-      ff1_f <= ff1_reg_f;
-      ff2_f <= ff2_reg_f;
-      lck_counter_f <= (others => '0');
-      ff_val_f <= '1';
-    else
-      lck_counter_f <= lck_counter_f + 1;
-      ff_val_f <= '0';
-    end if;
-  end if;
-end process;
-
-async_fifo_8_wr_en_proc :
-process(lck2_pll)
-begin
-  if rising_edge(lck2_pll) then
-    if (ff_val_f = '1') and (ff_val = '1') then
-      async_fifo_8_din(7 downto 0) <= ff1_reg(3) & ff1_reg_f(3) & ff1_reg(2) & ff1_reg_f(2) & ff1_reg(1) & ff1_reg_f(1) & ff1_reg(0) & ff1_reg_f(0);
-      async_fifo_8_din(15 downto 8) <= ff2_reg(3) & ff2_reg_f(3) & ff2_reg(2) & ff2_reg_f(2) & ff2_reg(1) & ff2_reg_f(1) & ff2_reg(0) & ff2_reg_f(0);
-      async_fifo_8_wr_en <= '1';
-    else 
-      async_fifo_8_wr_en <= '0';
-    end if;
-  end if;
-end process;
-
-
---lck2_bufg <= clk_125MHz;
-
-async_fifo_8_inst : ENTITY async_fifo_8
-  PORT MAP(
-    rst         => rst,
-    wr_clk      => lck2_pll,
-    rd_clk      => clk_125MHz,
-    din         => async_fifo_8_din,
-    wr_en       => async_fifo_8_wr_en,
-    rd_en       => async_fifo_8_rd_en,
-    dout        => async_fifo_8_dout,
-    full        => async_fifo_8_full,
-    empty       => open,
-    valid       => async_fifo_8_valid
-  );
-
-async_fifo_8_rd_en <= async_fifo_8_valid;
-
-
-state_sync_proc :
-process(clk_125MHz, rst)
-begin
-  if (rst = '1') then
-    state <= idle;
-  elsif rising_edge(clk_125MHz) then
-    state <= next_state;
-  end if;
-end process;
-
-next_state_process :
-process(state, all_fifo_valid, tick_counter(tick_counter'length - 1))
-begin
-  next_state <= state;
-  p6_6_xor_out <= '0';
-    case (state) is
-      when idle =>
-        next_state <= all_fifo_val_st;
-      when all_fifo_val_st => 
-        if (all_fifo_valid = '1') then
-          next_state <= counter_st;
-        end if;
-      when counter_st =>
-        if tick_counter(tick_counter'length - 1) = '1' then
-          next_state <= ready_st;
-        end if;
-      when ready_st =>
-        p6_6_xor_out <= '1';
-      when others =>
-        next_state <= idle;
-    end case;
-end process;
-
---async_fifo_8_dout <= ff2 & ff1;
---async_fifo_8_valid <= ff_val;
-
-async_fifo_8_dout_d_proc :
-  process(clk_125MHz)
-  begin
-    if rising_edge(clk_125MHz) then
-      if (async_fifo_8_valid = '1') then
-        async_fifo_8_dout_d <= async_fifo_8_dout;
-      end if;
-    end if;
-  end process;
-
-tick_counter_proc :
-  process(clk_125MHz, state)
-  begin
-    if (state /= counter_st) then
-      tick_counter <= (others => '0');
-    elsif rising_edge(clk_125MHz) then
-      if (async_fifo_8_valid = '1') then
-        if (async_fifo_8_dout_d = async_fifo_8_dout) then
-          tick_counter <= tick_counter + 1;
-          ff1_ff2_vec <= async_fifo_8_dout;
-        else
-          tick_counter <= (others => '0');
-        end if;
-      end if;
-    end if;
-  end process;
-  
-ff1_ff2_vec1 <= ff1_ff2_vec;
+--async_fifo_8_din <= ff2 & ff1;
+--async_fifo_8_wr_en <= ff_val;
+--
+----lck2_bufg <= clk_125MHz;
+--
+--async_fifo_8_inst : ENTITY async_fifo_8
+--  PORT MAP(
+--    rst         => rst,
+--    wr_clk      => lck2_pll,
+--    rd_clk      => clk_125MHz,
+--    din         => async_fifo_8_din,
+--    wr_en       => async_fifo_8_wr_en,
+--    rd_en       => async_fifo_8_rd_en,
+--    dout        => async_fifo_8_dout,
+--    full        => async_fifo_8_full,
+--    empty       => open,
+--    valid       => async_fifo_8_valid
+--  );
+--
+--async_fifo_8_rd_en <= async_fifo_8_valid;
+--
+--
+--state_sync_proc :
+--process(clk_125MHz, rst)
+--begin
+--  if (rst = '1') then
+--    state <= idle;
+--  elsif rising_edge(clk_125MHz) then
+--    state <= next_state;
+--  end if;
+--end process;
+--
+--next_state_process :
+--process(state, all_fifo_valid, tick_counter(tick_counter'length - 1))
+--begin
+--  next_state <= state;
+--  p6_6_xor_out <= '0';
+--    case (state) is
+--      when idle =>
+--        next_state <= all_fifo_val_st;
+--      when all_fifo_val_st => 
+--        if (all_fifo_valid = '1') then
+--          next_state <= counter_st;
+--        end if;
+--      when counter_st =>
+--        if tick_counter(tick_counter'length - 1) = '1' then
+--          next_state <= ready_st;
+--        end if;
+--      when ready_st =>
+--        p6_6_xor_out <= '1';
+--      when others =>
+--        next_state <= idle;
+--    end case;
+--end process;
+--
+----async_fifo_8_dout <= ff2 & ff1;
+----async_fifo_8_valid <= ff_val;
+--
+--async_fifo_8_dout_d_proc :
+--  process(clk_125MHz)
+--  begin
+--    if rising_edge(clk_125MHz) then
+--      if (async_fifo_8_valid = '1') then
+--        async_fifo_8_dout_d <= async_fifo_8_dout;
+--      end if;
+--    end if;
+--  end process;
+--
+--tick_counter_proc :
+--  process(clk_125MHz, state)
+--  begin
+--    if (state /= counter_st) then
+--      tick_counter <= (others => '0');
+--    elsif rising_edge(clk_125MHz) then
+--      if (async_fifo_8_valid = '1') then
+--        if (async_fifo_8_dout_d = async_fifo_8_dout) then
+--          tick_counter <= tick_counter + 1;
+--          ff1_ff2_vec(15 downto 8) <= (others => '0');
+--          ff1_ff2_vec(7 downto 0) <= async_fifo_8_dout;
+--        else
+--          tick_counter <= (others => '0');
+--        end if;
+--      end if;
+--    end if;
+--  end process;
+--  
+--ff1_ff2_vec1 <= "0000000" & fclk_pll_lock & ff1_ff2_vec(7 downto 0);
 
 
 IBUFGDS1_inst : IBUFGDS
@@ -596,10 +575,10 @@ adc2_data_receiver : entity HMCAD1511_v3_00
       fclk_obuf             => fclk2
     );
 
-t6 <= fclk1;
-t7 <= fclk2;
-fck1_xor_fck2 <= (fclk1 xor fclk2);
-t8 <= fck1_xor_fck2;
+--t6 <= fclk1;
+--t7 <= fclk2;
+--fck1_xor_fck2 <= (fclk1 xor fclk2);
+--t8 <= fck1_xor_fck2;
 
 nvalid_counter_proc:
 process(clk_125MHz, rst, all_fifo_valid)
@@ -703,15 +682,18 @@ adc1_trigger_capture_inst : entity trigger_capture
     Port map( 
       clk               => clk_125MHz,
       rst               => rst,
-      capture_mode      => trig_set_up_reg(1 downto 0),
-      capture_level     => trig_set_up_reg(15 downto 8),
-      trigger_set_up    => adc1_trigger_set_up,
+      front_condition   => front_condi,
+      capture_mode      => mode  ,
+      capture_level     => level ,
+      trigger_set_up    => set_up,
 
-      valid             => all_fifo_valid,
-      data              => fifo_stream_m_tdata1,        -- входные значения данных от АЦП
+      data              => adc1_shift_data,        -- входные значения данных от АЦП
       ext_trig          => ext_trig,                    -- внешний триггер
-      vector_valid      => vector_valid1,
-
+      vector_valid      => adc1_trig_vec,
+      
+      l_up              => adc1_up,
+      l_down            => adc1_down,
+      
       trigger_start     => adc1_trigger_start           -- выходной сигнал управляет модулем захвата данных
     );
 
@@ -722,16 +704,19 @@ adc2_trigger_capture_inst : entity trigger_capture
     Port map( 
       clk               => clk_125MHz,
       rst               => rst,
-      capture_mode      => trig_set_up_reg(1 downto 0),
-      capture_level     => trig_set_up_reg(15 downto 8),
-      trigger_set_up    => adc2_trigger_set_up,
+      front_condition   => front_condi,
+      capture_mode      => mode  ,
+      capture_level     => level ,
+      trigger_set_up    => set_up,
 
-      valid             => all_fifo_valid,
-      data              => fifo_stream_m_tdata2(31 downto 0),       -- входные значения данных от АЦП
+      data              => adc2_shift_data(31 downto 0),       -- входные значения данных от АЦП
       ext_trig          => ext_trig,                   -- внешний триггер
-      vector_valid      => open,
+      vector_valid      => adc2_0_trig_vec,
       
-      trigger_start     => adc2_trigger_start          -- выходной сигнал управляет модулем захвата данных
+      l_up              => adc2_up(3 downto 0),
+      l_down            => adc2_down(3 downto 0),
+      
+      trigger_start     => adc2_0_trigger_start          -- выходной сигнал управляет модулем захвата данных
     );
 
 adc3_trigger_capture_inst : entity trigger_capture
@@ -741,18 +726,79 @@ adc3_trigger_capture_inst : entity trigger_capture
     Port map( 
       clk               => clk_125MHz,
       rst               => rst,
-      capture_mode      => trig_set_up_reg(1 downto 0),
-      capture_level     => trig_set_up_reg(15 downto 8),
-      trigger_set_up    => adc3_trigger_set_up,
+      front_condition   => front_condi,
+      capture_mode      => mode  ,
+      capture_level     => level ,
+      trigger_set_up    => set_up,
 
-      valid             => all_fifo_valid,
-      data              => fifo_stream_m_tdata2(63 downto 32),       -- входные значения данных от АЦП
+      data              => adc2_shift_data(63 downto 32),       -- входные значения данных от АЦП
       ext_trig          => ext_trig,                   -- внешний триггер
-      vector_valid      => open,
+      vector_valid      => adc2_1_trig_vec,
       
-      trigger_start     => adc3_trigger_start          -- выходной сигнал управляет модулем захвата данных
+      l_up              => adc2_up(7 downto 4),
+      l_down            => adc2_down(7 downto 4),
+      
+      trigger_start     => adc2_1_trigger_start          -- выходной сигнал управляет модулем захвата данных
     );
 
+
+data_shift_module_inst : entity data_shift_module
+    Port map(
+      rst               => rst,
+      clk               => clk_125MHz,
+
+      adc1_data         => fifo_stream_m_tdata1,
+      adc2_data0        => fifo_stream_m_tdata2(31 downto 0),
+      adc2_data1        => fifo_stream_m_tdata2(63 downto 32),
+      data_valid        => all_fifo_valid,
+      
+      adc1_trig_vec     => adc1_trig_vec,
+      adc2_0_trig_vec   => adc2_0_trig_vec,
+      adc2_1_trig_vec   => adc2_1_trig_vec,
+      
+      tr_start1         => adc1_trigger_start,
+      tr_start2_0       => adc2_0_trigger_start,
+      tr_start2_1       => adc2_1_trigger_start,
+      level             => calib_level,
+      
+      capture_mode      => shift_module_capture_mode,
+      capture_level     => shift_module_capture_level,
+      trigger_set_up    => shift_module_trigger_set_up,
+      
+      pulse_out         => shift_data_pulse,
+      
+      adc1_data_o       => adc1_shift_data,
+      adc2_data0_o      => adc2_shift_data(31 downto 0),
+      adc2_data1_o      => adc2_shift_data(63 downto 32),
+      valid_o           => shift_data_valid,
+      
+      done              => shift_data_done
+    );
+
+
+process(clk_125MHz, rst)
+begin
+  if rst = '1' then
+    mode    <= (others => '0');
+    level   <= (others => '0');
+    set_up  <= '0';
+    front_condi <= (others => '0');
+  elsif rising_edge(clk_125MHz) then
+    if (shift_data_done = '0') then
+      mode   <= shift_module_capture_mode  ;
+      level  <= shift_module_capture_level ;
+      set_up <= shift_module_trigger_set_up;
+      front_condi <= "10";
+    else
+      mode   <= captupe_mode;
+      level  <= trigger_level;
+      set_up <= adcs_trigger_set_up;
+      front_condi <= front_condition;
+    end if;
+  end if;
+end process;
+
+data_capture_rst <= rst or (not shift_data_done);
 
 adc1_data_capture_inst : entity data_capture
     generic map(
@@ -761,14 +807,14 @@ adc1_data_capture_inst : entity data_capture
       c_trig_delay              =>  2
     )
     Port map( 
-      areset                    => rst,
+      areset                    => data_capture_rst,
       trigger_start             => trigger_start,
       window_size               => trig_window_width_reg,
       trig_position             => trig_position_reg,
 
       aclk                      => clk_125MHz, 
-      s_strm_data               => fifo_stream_m_tdata1,
-      s_strm_valid              => all_fifo_valid,
+      s_strm_data               => adc1_shift_data,
+      s_strm_valid              => shift_data_valid,
       --dec                       => dec1,
 
       m_strm_data               => adc1_m_strm_data,
@@ -784,14 +830,14 @@ adc2_data_capture_inst : entity data_capture
       c_trig_delay              =>  2
     )
     Port map( 
-      areset                    => rst,
+      areset                    => data_capture_rst,
       trigger_start             => trigger_start,
       window_size               => trig_window_width_reg,
       trig_position             => trig_position_reg,
 
       aclk                      => clk_125MHz, 
-      s_strm_data               => fifo_stream_m_tdata2,
-      s_strm_valid              => all_fifo_valid,
+      s_strm_data               => adc2_shift_data,
+      s_strm_valid              => shift_data_valid,
 
       m_strm_data               => adc2_m_strm_data,
       m_strm_valid              => adc2_m_strm_valid,
@@ -799,47 +845,47 @@ adc2_data_capture_inst : entity data_capture
       m_strm_rst                => adc2_capture_module_rst
     );
 
-error <= (trig1_en and (not trig2_en)) or (trig1_en and (not trig2_en));
 
 
-trigger_set_up_process :
-  process(clk_125MHz)
-  begin
-    if rising_edge(clk_125MHz) then
-      if (control_reg(4) = '1') then
-        case trig_set_up_reg(3 downto 2) is
-          when b"00" => 
-            adc1_trigger_set_vec(0) <= '1';
-            adc2_trigger_set_vec(0) <= '1';
-            adc2_trigger_set_vec(0) <= '1';
-          when b"10" => 
-            adc2_trigger_set_vec(0) <= '1';
-          when b"01" => 
-            adc1_trigger_set_vec(0) <= '1';
-          when b"11" => 
-            adc3_trigger_set_vec(0) <= '1';
-          when others =>
-            null;
-        end case;
-      else
-        adc1_trigger_set_vec(1) <= adc1_trigger_set_vec(0);
-        adc2_trigger_set_vec(1) <= adc2_trigger_set_vec(0);
-        adc3_trigger_set_vec(1) <= adc3_trigger_set_vec(0);
-        adc1_trigger_set_vec(0) <= '0';
-        adc2_trigger_set_vec(0) <= '0';
-        adc3_trigger_set_vec(0) <= '0';
-      end if;
-    end if;
-  end process;
+--process(clk_125MHz, rst)
+--begin
+--  if (rst = '1') then
+--    adcs_trigger_set_up <= '0';
+--  else
+--    if rising_edge(clk_125MHz) then
+--      if ((control_reg(1) = '1') or (control_reg(0) = '1')) then
+--        adcs_trigger_set_up <= '1';
+--      else
+--        adcs_trigger_set_up <= '0'
+--      end if;
+--    end if;
+--  end if;
+--end process;
 
---adc1_trigger_set_up <= control_reg(4) when trig_set_up_reg(3) = '0' else '0';
---adc2_trigger_set_up <= control_reg(4) when trig_set_up_reg(2) = '0' else '0';
+--adcs_trigger_set_up <= control_reg(1) or control_reg(2);
 
-adc1_trigger_set_up <= (not adc1_trigger_set_vec(1)) and adc1_trigger_set_vec(0);
-adc2_trigger_set_up <= (not adc2_trigger_set_vec(1)) and adc2_trigger_set_vec(0);
-adc3_trigger_set_up <= (not adc3_trigger_set_vec(1)) and adc3_trigger_set_vec(0);
 
-trigger_start <= adc1_trigger_start or adc2_trigger_start or adc3_trigger_start;
+
+
+
+process(adcs_is_valid, adc1_trigger_start, adc2_0_trigger_start, adc2_1_trigger_start)
+begin
+  trigger_start <= '0';
+    case adcs_is_valid is 
+      when "00" =>
+        trigger_start <= adc1_trigger_start or adc2_0_trigger_start or adc2_1_trigger_start;
+      when "01" => 
+        trigger_start <= adc1_trigger_start;
+      when "10" => 
+        trigger_start <= adc2_0_trigger_start;
+      when "11" =>
+        trigger_start <= adc2_1_trigger_start;
+      when others =>
+        trigger_start <= adc1_trigger_start or adc2_0_trigger_start or adc2_1_trigger_start;
+    end case;
+end process;
+
+
 
 QuadSPI_adc_250x4_module_inst : entity QuadSPI_adc_250x4_module
     Port map(
@@ -922,18 +968,21 @@ m_fcb_wr_process :
         if (infrst_rst_out = '1') then
           wr_req_vec <= (others => '0');
           control_reg(15 downto 0) <= (others => '0');
-          trig_set_up_reg(15 downto 8) <= x"7f";
-          trig_set_up_reg(3 downto 0) <= (others => '0');
-          low_adc_buff_len <= x"2004";
+          trigger_level <= x"7f";
           trig_window_width_reg <= x"0200";
-          calib_pattern_reg <= x"55AA";
-          adc_calib <= '0';
+          adcs_is_valid <= "00";
+          front_condition <= "00";
+          calib_level <= x"96";
+          captupe_mode <= (others => '0');
+          adcs_trigger_set_up <= '0';
         elsif (m_fcb_wrreq = '1') then
           m_fcb_wrack <= '1';
           case reg_address_int is
             when 0 => 
               wr_req_vec(0) <= '1';
-              trig_set_up_reg(15 downto 2) <= m_fcb_wrdata(15 downto 2);
+              adcs_is_valid     <= m_fcb_wrdata(3 downto 2);
+              front_condition   <= m_fcb_wrdata(5 downto 4);
+              trigger_level     <= m_fcb_wrdata(15 downto 8);
             when 1 => 
               wr_req_vec(1) <= '1';
               trig_window_width_reg <= m_fcb_wrdata;
@@ -942,28 +991,64 @@ m_fcb_wr_process :
               trig_position_reg <= m_fcb_wrdata;
             when 3 =>
               wr_req_vec(3) <= '1';
-              trig_set_up_reg(1 downto 0) <= m_fcb_wrdata(3 downto 2);
-              control_reg(1 downto 0) <= m_fcb_wrdata(1 downto 0);
-              control_reg(7 downto 4) <= m_fcb_wrdata(7 downto 4);
+              control_reg(3 downto 0)  <= m_fcb_wrdata(3 downto 0);
+              captupe_mode <= m_fcb_wrdata(2 downto 1);
+
+              if ((m_fcb_wrdata(1) = '1') or (m_fcb_wrdata(2) = '1')) then
+                adcs_trigger_set_up <= '1';
+              else
+                adcs_trigger_set_up <= '0';
+              end if;
+              
+              
             when 4 =>
               wr_req_vec(4) <= '1';
-              calib_pattern_reg <= m_fcb_wrdata;
-            when 5 =>
-              wr_req_vec(5) <= '1';
-              low_adc_buff_len <= m_fcb_wrdata;
-            when 6 => 
-              pulse_start <= m_fcb_wrdata(0);
+              calib_level <= m_fcb_wrdata(7 downto 0);
             when others =>
+              control_reg <= (others => '0');
+              wr_req_vec  <= (others => '0');
           end case;
         else 
           m_fcb_wrack               <= '0';
           wr_req_vec                <= (others => '0');
           control_reg(15 downto 0)  <= (others => '0');
-          pulse_start               <= '0';
-          adc_calib                 <= control_reg(0);
+          adcs_trigger_set_up       <= '0';
         end if;
       end if;
     end process;
+
+m_fcb_rd_process :
+  process(clk_125MHz)
+  begin
+    if rising_edge(clk_125MHz) then
+      if (m_fcb_rdreq = '1') then
+        m_fcb_rdack <= '1';
+        case reg_address_int is
+          when 0 => 
+              m_fcb_rddata(1 downto 0) <= (others => '0'); 
+              m_fcb_rddata(3 downto 2)  <= adcs_is_valid;
+              m_fcb_rddata(5 downto 4)  <= front_condition;
+              m_fcb_rddata(7 downto 6) <= (others => '0'); 
+              m_fcb_rddata(15 downto 8) <= trigger_level;
+          when 1 => 
+            m_fcb_rddata <= trig_window_width_reg;
+          when 2 =>
+            m_fcb_rddata <= trig_position_reg;
+          when 3 =>
+            m_fcb_rddata(3 downto 0) <= control_reg(3 downto 0);
+            m_fcb_rddata(15 downto 4) <= (others => '0');
+          when 4 =>
+            m_fcb_rddata(7 downto 0) <= calib_level;
+          when others =>
+            m_fcb_rddata <= (others => '1');
+        end case;
+      else 
+        m_fcb_rdack <= '0';
+      end if;
+    end if;
+  end process;
+
+pulse_start <= control_reg(3);
 
 --OBUF_inst : OBUF
 --   generic map (
@@ -983,7 +1068,7 @@ m_fcb_wr_process :
    port map (
       O => pulse_out_p,     -- Diff_p output (connect directly to top-level port)
       OB => pulse_out_n,   -- Diff_n output (connect directly to top-level port)
-      I => (not pulse)      -- Buffer input 
+      I => ((pulse or shift_data_pulse))      -- Buffer input 
    );
 
 --pulse_out <= pulse;
@@ -1002,39 +1087,7 @@ pulse_counter_proc :
       end if;
     end process;
 
-m_fcb_rd_process :
-    process(clk_125MHz)
-    begin
-      if rising_edge(clk_125MHz) then
-        if (m_fcb_rdreq = '1') then
-          m_fcb_rdack <= '1';
-          case reg_address_int is
-            when 0 => 
-              m_fcb_rddata(15 downto 2) <= trig_set_up_reg(15 downto 2);
-            when 1 => 
-              m_fcb_rddata <= trig_window_width_reg;
-            when 2 =>
-              m_fcb_rddata <= trig_position_reg;
-            when 3 =>
-              m_fcb_rddata(1 downto 0) <= control_reg(1 downto 0);
-              m_fcb_rddata(3 downto 2) <= trig_set_up_reg(1 downto 0);
-              m_fcb_rddata(14 downto 4)<= control_reg(14 downto 4);
-              m_fcb_rddata(15)<= error;
-            when 4 =>
-              m_fcb_rddata <= calib_pattern_reg;
-            when 5 => 
-              m_fcb_rddata <= low_adc_buff_len;
-            when 6 =>
-              m_fcb_rddata(0) <= fclk_pll_lock;
-            when 7 =>
-              m_fcb_rddata <= ff1_ff2_vec1;
-            when others =>
-          end case;
-        else 
-          m_fcb_rdack <= '0';
-        end if;
-      end if;
-    end process;
+
 
 
 

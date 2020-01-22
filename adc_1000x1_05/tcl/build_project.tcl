@@ -24,7 +24,8 @@ set_property "target_language" "VHDL" $obj
 add_files -norecurse ../src/ADC1511_Dual_1GHzX2_Top.vhd
 add_files -norecurse ../src/data_capture.vhd
 add_files -norecurse ../src/clock_generator.vhd
-add_files -norecurse ../src/fclk_clock_gen.vhd
+add_files -norecurse ../src/data_shift_module.vhd
+#add_files -norecurse ../src/fclk_clock_gen.vhd
 add_files -norecurse ../src/QuadSPI_adc_250x4_module.vhd
 add_files -norecurse ../src/trigger_capture.vhd
 add_files -norecurse ../src/SPI_ADC_250x4/spi_adc_250x4_master.vhd
@@ -34,11 +35,11 @@ add_files -norecurse ../src/HMCAD1511_v3_00/high_speed_clock_to_serdes.vhd
 #add_files -norecurse ../src/HMCAD1511_v3_00/HMCAD1511_x2_v1_00.vhd
 add_files -norecurse ../src/HMCAD1511_v3_00/HMCAD1511_v3_00.vhd
 add_files -norecurse ../src/HMCAD1511_v3_00/data_deserializer.vhd
-add_files -norecurse ../src/HMCAD1511_v3_00/frame_deserializer.vhd
+#add_files -norecurse ../src/HMCAD1511_v3_00/frame_deserializer.vhd
 add_files -norecurse ../src/blk_mem_gen_v7_3_0/mem_64_4096.xci
 add_files -norecurse ../src/fifo_generator_v9_3_0/fifo_64_8.xci
 add_files -norecurse ../src/fifo_generator_v9_3_2/async_fifo_64.xci
-add_files -norecurse ../src/fifo_generator_v9_3_3/async_fifo_8.xci
+#add_files -norecurse ../src/fifo_generator_v9_3_3/async_fifo_8.xci
 
 
 ########################################################################

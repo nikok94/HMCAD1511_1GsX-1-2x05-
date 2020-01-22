@@ -39,114 +39,124 @@ entity trigger_capture is
     Port ( 
       clk               : in std_logic;
       rst               : in std_logic;
-      capture_mode      : in std_logic_vector(1 downto 0);  -- определяет режим работы захвата 00 - захват по записи в контрольный регистр, 01 - захват по переднему фронту при значении входных данных больше capture_level
-                                                            -- 10 - захват по заднему фронту при значении входных данных меньше capture_level, 11 - захват по внешнему триггеру ext_trig
-      capture_level     : in std_logic_vector(7 downto 0);  -- определяет уровень срабатывания триггера при capture_mode = 01 и capture_mode = 10
-      trigger_set_up    : in std_logic;
 
-      valid             : in std_logic;
+      capture_mode      : in std_logic_vector(1 downto 0); -- Задает условия запуска b01 – старт по уровню (нормальный) b10 – auto b11 –внешний 
+      front_condition   : in std_logic_vector(1 downto 0); -- Задает условия захвата данных: b10 – по нарастающему b01 – по спадающему
+
+      capture_level     : in std_logic_vector(7 downto 0);
+
+      trigger_set_up    : in std_logic;
       data              : in std_logic_vector(c_data_width-1 downto 0); -- входные значения данных от АЦП
       vector_valid      : out std_logic_vector(c_data_width/8 - 1 downto 0);
       ext_trig          : in std_logic; -- внешний триггер
+      
+      l_up              : out std_logic_vector(c_data_width/8 - 1 downto 0);
+      l_down            : out std_logic_vector(c_data_width/8 - 1 downto 0);
       
       trigger_start     : out std_logic -- выходной сигнал управляет модулем захвата данных
     );
 end trigger_capture;
 
 architecture Behavioral of trigger_capture is
-    --signal capture_mode     : std_logic_vector(1 downto 0); 
-    --signal capture_level    : std_logic_vector(7 downto 0); -- определяет уровень срабатывания триггера при capture_mode = 01 и capture_mode = 10
-    signal control_reg_setup: std_logic_vector(3 downto 0);
-    signal ext_start        : std_logic;
-    signal ext_start_sync_vec : std_logic_vector(3 downto 0);
-    signal level_up_start   : std_logic;
-    signal level_up         : std_logic:= '0';
-    signal level_up_d       : std_logic:= '0';
-    signal level_down_start : std_logic;
-    signal level_down       : std_logic:= '0';
     signal level_up_vect    : std_logic_vector(c_data_width/8 - 1 downto 0);
-    signal level_up_vect_d  : std_logic_vector(c_data_width/8 - 1 downto 0);
     signal level_down_vect  : std_logic_vector(c_data_width/8 - 1 downto 0);
-    signal level_down_vect_d: std_logic_vector(c_data_width/8 - 1 downto 0);
     signal data_to_compare  : std_logic_vector(c_data_width + 7 downto 0);
     signal old_data_byte    : std_logic_vector(7 downto 0);
-    signal capture_enable   : std_logic;
-    signal capture_start    : std_logic;
+    type state_machine      is (idle, start_ready, level_up_state, level_down_state, ext_trig_state, trigger_start_state);
+    signal state, next_state: state_machine;
+    signal vector_o         : std_logic_vector(c_data_width/8 - 1 downto 0);
+    signal start            : std_logic;
 
 begin
 
-trigger_start <= capture_start;
+process(clk, rst)
+begin
+  if (rst = '1') then
+    vector_o <= (others => '0');
+  elsif rising_edge(clk) then
+     case state is 
+       when level_up_state => 
+         if (level_up_vect /= 0) then
+          vector_o <= level_up_vect;
+        end if;
+       when level_down_state => 
+          if (level_down_vect /= 0) then
+          vector_o <= level_down_vect;
+        end if;
+       when others => 
+     end case;
+  end if;
+end process;
 
-capture_enable_proc :
-  process(clk,  rst)
-  begin
-    if rst = '1' then
-      capture_enable <= '0';
-    elsif rising_edge(clk) then
-      if trigger_set_up = '1' then
-        capture_enable <= '1';
-      elsif (capture_start = '1') then
-        capture_enable <= '0';
-      end if;
-    end if;
-  end process;
+vector_valid <= vector_o;
 
-ext_start_proc :
-  process(clk, rst, capture_start)
-  begin
-    if (rst = '1') or (capture_start = '1') then 
-      ext_start_sync_vec <= (others => '0');
-    elsif rising_edge(clk) then
-      ext_start_sync_vec(0) <= ext_trig;
-      ext_start_sync_vec(2 downto 1) <= ext_start_sync_vec(1 downto 0);
-    end if;
-  end process;
+sync_process:
+process(clk, rst)
+begin
+  if (rst = '1') then
+    state <= idle;
+  elsif rising_edge(clk) then
+    state <= next_state;
+    trigger_start <= start;
+  end if;
+end process;
 
-trigger_start_out_proc :
-  process(clk, rst)
-  begin
-      if rst = '1' then
-        capture_start <= '0';
-      elsif rising_edge(clk) then
-        if (capture_enable = '1') then
-          case capture_mode is
-            when "00" => 
-              capture_start <= '1';
-            when "01" => 
-              if (level_up_vect_d = 0) and (level_up_vect /= 0) then
-                capture_start <= '1';
-                vector_valid <= level_up_vect;
-              else
-                capture_start <= '0';
-              end if;
+next_state_process:
+process(state, trigger_set_up, capture_mode, level_up_vect, ext_trig, front_condition)
+begin
+  next_state <= state;
+  start <= '0';
+    case state is
+      when idle =>
+        next_state <= start_ready;
+      when start_ready =>
+        if (trigger_set_up = '1') then
+          case capture_mode is 
             when "10" => 
-              if (level_down_vect_d = 0) and (level_down_vect /= 0) then
-                capture_start <= '1';
-                vector_valid <= level_down_vect;
+              next_state <= trigger_start_state;
+            when "01" =>
+              if (front_condition(0) = '1') then
+                next_state <= level_down_state;
+              elsif (front_condition(1) = '1') then
+                next_state <= level_up_state;
               else
-                capture_start <= '0';
+                next_state <= idle;
               end if;
             when "11" => 
-              capture_start <= ext_start_sync_vec(2);
+              next_state <= ext_trig_state;
             when others => 
-              capture_start <= '0';
+              next_state <= idle;
           end case;
-        else
-          capture_start <= '0';
         end if;
-      end if;
-  end process;
+      when level_up_state =>
+        if (level_up_vect /= 0) then
+          next_state <= trigger_start_state;
+        end if;
+      when level_down_state => 
+        if (level_down_vect /= 0) then
+          next_state <= trigger_start_state;
+        end if;
+      when ext_trig_state => 
+        if (ext_trig = '1') then
+          next_state <= trigger_start_state;
+        end if;
+      when trigger_start_state => 
+        start <= '1';
+        next_state <= idle;
+      when others => 
+        next_state <= idle;
+    end case;
+end process;
+
+l_up <= level_up_vect;
+l_down <= level_down_vect;
   
 old_data_byte_process :
   process(clk)
   begin
     if rising_edge(clk) then
-      if (valid = '1') then
-        old_data_byte <= data(c_data_width-1 downto c_data_width - 8);
-      end if;
-        data_to_compare   <= data & old_data_byte;
-        level_up_vect_d   <= level_up_vect;
-        level_down_vect_d <= level_down_vect;
+      old_data_byte <= data(7 downto 0);
+      data_to_compare   <= old_data_byte & data;
     end if;
   end process;
 
@@ -155,10 +165,14 @@ level_up_compare_proc:
   process(clk)
   begin
     if rising_edge(clk) then
-      if (data_to_compare(8*i + 7 downto 8*i) >= capture_level and data_to_compare(8*(i-1) + 7 downto 8*(i-1)) < capture_level) then
-        level_up_vect(i-1) <= '1';
+      if (data_to_compare(8*(i - 1) + 7 downto 8*(i - 1)) >= capture_level) then
+        if (data_to_compare(8*i + 7 downto 8*i) < capture_level) then
+          level_up_vect(i - 1) <= '1';
+        else
+          level_up_vect(i - 1) <= '0';
+        end if;
       else
-        level_up_vect(i-1) <= '0';
+        level_up_vect(i - 1) <= '0';
       end if;
     end if;
   end process;
@@ -167,14 +181,17 @@ level_down_compare_proc:
   process(clk)
   begin
     if rising_edge(clk) then
-      if (data_to_compare(8*i + 7 downto 8*i) <= capture_level and data_to_compare(8*(i-1) + 7 downto 8*(i-1)) > capture_level) then
-        level_down_vect(i-1) <= '1';
+      if (data_to_compare(8*(i - 1) + 7 downto 8*(i - 1)) <= capture_level) then
+        if (data_to_compare(8*i + 7 downto 8*i) > capture_level) then
+          level_down_vect(i - 1) <= '1';
+        else
+          level_down_vect(i - 1) <= '0';
+        end if;
       else
-        level_down_vect(i-1) <= '0';
+        level_down_vect(i - 1) <= '0';
       end if;
     end if;
   end process;
-  
 end generate generate_process;
 
 
