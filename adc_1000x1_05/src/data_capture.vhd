@@ -113,8 +113,8 @@ begin
     addr_start_position <= (others => '0');
   elsif rising_edge(aclk) then
     if (state = wait_trigger_start) then
-        addr_start_position <= (((wr_addr - trig_position(clog2_c_memory_max_width - 1 downto 0)) - c_trig_delay) - 1);
-        addr_end_position   <= (((wr_addr - trig_position(clog2_c_memory_max_width - 1 downto 0)) - c_trig_delay) - 2);
+        addr_start_position <= (((wr_addr - trig_position(clog2_c_memory_max_width - 1 downto 0)) - c_trig_delay));
+        addr_end_position   <= (((wr_addr - trig_position(clog2_c_memory_max_width - 1 downto 0)) - c_trig_delay) - 1);
     end if;
   end if;
 end process;

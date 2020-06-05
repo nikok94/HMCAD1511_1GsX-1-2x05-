@@ -325,6 +325,9 @@ architecture Behavioral of ADC1511_Dual_1GHzX2_Top is
     signal calib_level                  : std_logic_vector(7 downto 0):= x"96";
     signal front_condi                  : std_logic_vector(1 downto 0); 
     signal data_capture_rst             : std_logic;
+    signal adc1_vec_offset              : std_logic_vector(7 downto 0) := (others => '0');
+    signal adc2_0_vec_offset            : std_logic_vector(3 downto 0) := (others => '0');
+    signal adc2_1_vec_offset            : std_logic_vector(3 downto 0) := (others => '0');
     
     
     
@@ -355,18 +358,18 @@ Clock_gen_inst : entity clock_generator
 
 main_pll_lock <= pll_lock;
 
---adc_calib_done_proc :
---process(clk_125MHz, rst)
---begin
---  if (rst = '1') then
---    calib_done <= '0';
---  elsif rising_edge(clk_125MHz) then
---    if all_fifo_valid = '1' then
---      calib_done <= '1';
---    end if;
---  end if;
---end process;
-calib_done <= shift_data_done;
+adc_calib_done_proc :
+process(clk_125MHz, rst)
+begin
+  if (rst = '1') then
+    calib_done <= '0';
+  elsif rising_edge(clk_125MHz) then
+    if all_fifo_valid = '1' then
+      calib_done <= '1';
+    end if;
+  end if;
+end process;
+--calib_done <= shift_data_done;
 
 adc_calib_done <= calib_done;
 
@@ -741,7 +744,6 @@ adc3_trigger_capture_inst : entity trigger_capture
       trigger_start     => adc2_1_trigger_start          -- выходной сигнал управляет модулем захвата данных
     );
 
-
 data_shift_module_inst : entity data_shift_module
     Port map(
       rst               => rst,
@@ -752,59 +754,87 @@ data_shift_module_inst : entity data_shift_module
       adc2_data1        => fifo_stream_m_tdata2(63 downto 32),
       data_valid        => all_fifo_valid,
       
-      adc1_trig_vec     => adc1_trig_vec,
-      adc2_0_trig_vec   => adc2_0_trig_vec,
-      adc2_1_trig_vec   => adc2_1_trig_vec,
-      
-      tr_start1         => adc1_trigger_start,
-      tr_start2_0       => adc2_0_trigger_start,
-      tr_start2_1       => adc2_1_trigger_start,
-      level             => calib_level,
-      
-      capture_mode      => shift_module_capture_mode,
-      capture_level     => shift_module_capture_level,
-      trigger_set_up    => shift_module_trigger_set_up,
-      
-      pulse_out         => shift_data_pulse,
+      adc1_vec_offset   => adc1_vec_offset  ,
+      adc2_0_vec_offset => adc2_0_vec_offset,
+      adc2_1_vec_offset => adc2_1_vec_offset,
       
       adc1_data_o       => adc1_shift_data,
       adc2_data0_o      => adc2_shift_data(31 downto 0),
       adc2_data1_o      => adc2_shift_data(63 downto 32),
-      valid_o           => shift_data_valid,
-      
-      done              => shift_data_done
+      valid_o           => shift_data_valid
     );
 
 
-process(clk_125MHz, rst)
-begin
-  if rst = '1' then
-    mode    <= (others => '0');
-    level   <= (others => '0');
-    set_up  <= '0';
-    front_condi <= (others => '0');
-  elsif rising_edge(clk_125MHz) then
-    if (shift_data_done = '0') then
-      mode   <= shift_module_capture_mode  ;
-      level  <= shift_module_capture_level ;
-      set_up <= shift_module_trigger_set_up;
-      front_condi <= "10";
-    else
-      mode   <= captupe_mode;
-      level  <= trigger_level;
-      set_up <= adcs_trigger_set_up;
-      front_condi <= front_condition;
-    end if;
-  end if;
-end process;
 
-data_capture_rst <= rst or (not shift_data_done);
+
+--data_shift_module_inst : entity data_shift_module
+--    Port map(
+--      rst               => rst,
+--      clk               => clk_125MHz,
+--
+--      adc1_data         => fifo_stream_m_tdata1,
+--      adc2_data0        => fifo_stream_m_tdata2(31 downto 0),
+--      adc2_data1        => fifo_stream_m_tdata2(63 downto 32),
+--      data_valid        => all_fifo_valid,
+--      
+--      adc1_trig_vec     => adc1_trig_vec,
+--      adc2_0_trig_vec   => adc2_0_trig_vec,
+--      adc2_1_trig_vec   => adc2_1_trig_vec,
+--      
+--      tr_start1         => adc1_trigger_start,
+--      tr_start2_0       => adc2_0_trigger_start,
+--      tr_start2_1       => adc2_1_trigger_start,
+--      level             => calib_level,
+--      
+--      capture_mode      => shift_module_capture_mode,
+--      capture_level     => shift_module_capture_level,
+--      trigger_set_up    => shift_module_trigger_set_up,
+--      
+--      pulse_out         => shift_data_pulse,
+--      
+--      adc1_data_o       => adc1_shift_data,
+--      adc2_data0_o      => adc2_shift_data(31 downto 0),
+--      adc2_data1_o      => adc2_shift_data(63 downto 32),
+--      valid_o           => shift_data_valid,
+--      
+--      done              => shift_data_done
+--    );
+
+mode   <= captupe_mode;
+level  <= trigger_level;
+set_up <= adcs_trigger_set_up;
+front_condi <= front_condition;
+
+
+--process(clk_125MHz, rst)
+--begin
+--  if rst = '1' then
+--    mode    <= (others => '0');
+--    level   <= (others => '0');
+--    set_up  <= '0';
+--    front_condi <= (others => '0');
+--  elsif rising_edge(clk_125MHz) then
+--    if (shift_data_done = '0') then
+--      mode   <= shift_module_capture_mode  ;
+--      level  <= shift_module_capture_level ;
+--      set_up <= shift_module_trigger_set_up;
+--      front_condi <= "10";
+--    else
+--      mode   <= captupe_mode;
+--      level  <= trigger_level;
+--      set_up <= adcs_trigger_set_up;
+--      front_condi <= front_condition;
+--    end if;
+--  end if;
+--end process;
+
+data_capture_rst <= rst; --or (not shift_data_done);
 
 adc1_data_capture_inst : entity data_capture
     generic map(
       c_max_window_size_width   =>  16,
       c_strm_data_width         =>  64,
-      c_trig_delay              =>  2
+      c_trig_delay              =>  3
     )
     Port map( 
       areset                    => data_capture_rst,
@@ -827,7 +857,7 @@ adc2_data_capture_inst : entity data_capture
     generic map(
       c_max_window_size_width   =>  16,
       c_strm_data_width         =>  64,
-      c_trig_delay              =>  2
+      c_trig_delay              =>  3
     )
     Port map( 
       areset                    => data_capture_rst,
@@ -1004,6 +1034,10 @@ m_fcb_wr_process :
             when 4 =>
               wr_req_vec(4) <= '1';
               calib_level <= m_fcb_wrdata(7 downto 0);
+            when 5 =>
+              adc1_vec_offset   <= m_fcb_wrdata(7 downto 0);
+              adc2_0_vec_offset <= m_fcb_wrdata(11 downto 8);
+              adc2_1_vec_offset <= m_fcb_wrdata(15 downto 12);
             when others =>
               control_reg <= (others => '0');
               wr_req_vec  <= (others => '0');
@@ -1039,6 +1073,8 @@ m_fcb_rd_process :
             m_fcb_rddata(15 downto 4) <= (others => '0');
           when 4 =>
             m_fcb_rddata(7 downto 0) <= calib_level;
+          when 5 =>
+            m_fcb_rddata <= adc2_1_vec_offset & adc2_0_vec_offset & adc1_vec_offset;
           when others =>
             m_fcb_rddata <= (others => '1');
         end case;
